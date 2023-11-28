@@ -1,8 +1,7 @@
-import pickle
 from abc import abstractmethod
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+import pickle
 
 
 class BaseModel(object):
@@ -106,63 +105,6 @@ class BaseModel(object):
         return model
 
 
-class SingleClusterLogisticRegression(BaseModel):
-    """Example of a model on a single cluster, fitting a logistic regression on the different pairs.
-    You can use it to understand how to write your own model and the data format that we are waiting for.
-    """
-
-    def __init__(self, penalty="l2"):
-        self.penalty = penalty
-        self.model = self.instantiate()
-
-    def instantiate(self):
-        return LogisticRegression(penalty=self.penalty)
-
-    def fit(self, X, Y):
-        self.model.fit(
-            np.concatenate([(X - Y), (Y - X)], axis=0),
-            np.concatenate([np.ones(len(X)), np.zeros(len(X))], axis=0),
-        )
-
-    def predict_utility(self, X):
-        return self.model.decision_function(X)
-
-
-class TwoRandomClustersLogisticRegression(BaseModel):
-    """Example of a model on two cluster, fitting a logistic regression on randomly selected pairs.
-    You can use it to understand how to write your own model and the data format that we are waiting for.
-    This model does not work well but you should have same data formatting with TwoClustersMIP.
-    """
-
-    def __init__(self):
-        self.seed = 123
-        self.models = self.instantiate()
-
-    def instantiate(self):
-        model_1 = LogisticRegression()
-        model_2 = LogisticRegression()
-        return [model_1, model_2]
-
-    def fit(self, X, Y):
-        np.random.seed(self.seed)
-        indexes = np.random.randint(0, 2, (len(X)))
-        self.models[0].fit(
-            np.concatenate([(X - Y)[indexes.astype(bool)], (Y - X)[indexes.astype(bool)]]),
-            np.concatenate([np.ones(np.sum(indexes)), np.zeros(np.sum(indexes))]),
-        )
-
-        indexes = 1 - indexes
-        self.models[1].fit(
-            np.concatenate([(X - Y)[indexes.astype(bool)], (Y - X)[indexes.astype(bool)]]),
-            np.concatenate([np.ones(np.sum(indexes)), np.zeros(np.sum(indexes))]),
-        )
-
-    def predict_utility(self, X):
-        return np.stack(
-            [self.models[0].decision_function(X), self.models[1].decision_function(X)], axis=1
-        )
-
-
 class RandomExampleModel(BaseModel):
     """Example of a model on two cluster, fitting a logistic regression on randomly selected pairs.
     You can use it to understand how to write your own model and the data format that we are waiting for.
@@ -190,7 +132,9 @@ class RandomExampleModel(BaseModel):
         return self
 
     def predict_utility(self, X):
-        return np.stack([np.dot(X, self.weights[0]), np.dot(X, self.weights[1])], axis=1)
+        return np.stack(
+            [np.dot(X, self.weights[0]), np.dot(X, self.weights[1])], axis=1
+        )
 
 
 class TwoClustersMIP(BaseModel):
