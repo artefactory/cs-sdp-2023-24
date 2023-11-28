@@ -121,7 +121,6 @@ class RandomExampleModel(BaseModel):
     def fit(self, X, Y):
         """fit function, sets random weights for each cluster"""
         np.random.seed(self.seed)
-        indexes = np.random.randint(0, 2, (len(X)))
         num_features = X.shape[1]
         weights_1 = np.random.rand(num_features)
         weights_2 = np.random.rand(num_features)
@@ -144,7 +143,6 @@ class TwoClustersMIP(BaseModel):
 
     def __init__(self, n_pieces, time_limit=None):
         """Initialization of the MIP Variables
-
 
         Parameters
         ----------
