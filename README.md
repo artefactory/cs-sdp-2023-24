@@ -1,2 +1,4 @@
-# cs-sdp-2023-24
-Practical Work of the Decision Systems and Preferences of Msc AI at CentraleSupélec
+<p float="left">
+  <img src="images/CS.png" width="45%" />
+  <img src="images/artefact.png" width="50%" />
+</p>
