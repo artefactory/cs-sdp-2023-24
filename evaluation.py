@@ -7,8 +7,6 @@ import metrics
 import numpy as np
 from data import Dataloader
 from models import HeuristicModel, TwoClustersMIP
-from solution_model import ExpectationMaximizationUtilityAdditive as HeuristicModel
-from solution_model import MyGurobiSolutionTwoClustersMIP as TwoClustersMIP
 
 if __name__ == "__main__":
     ### First part: test of the MIP model

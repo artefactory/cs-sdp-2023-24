@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 import numpy as np
-from sklearn.metrics import r2_score
+from scipy.special import comb
 
 
 class BaseMetric:
@@ -81,7 +81,8 @@ class PairsExplained(BaseMetric):
 class ClusterIntersection(BaseMetric):
     """
     Computes the average intersection percentage of predicted clusters vs ground truth.
-    For now, only works for two clusters
+    Rand Index metric
+    https://en.wikipedia.org/wiki/Rand_index
     """
 
     def __init__(self):
@@ -102,7 +103,15 @@ class ClusterIntersection(BaseMetric):
         float Percentage of pairs attributed regrouped within same cluster in prediction compared to ground truth
         """
         assert y_true.shape == y_pred.shape
-        return np.max([np.sum(y_true == y_pred), np.sum(y_true == 1 - y_pred)]) / y_pred.shape[0]
+
+        truepos_plus_falsepos = comb(np.bincount(y_true), 2).sum()
+        truepos_plus_falseneg = comb(np.bincount(y_pred), 2).sum()
+        concatenation = np.c_[(y_true, y_pred)]
+        true_positive = sum(comb(np.bincount(concatenation[concatenation[:, 0] == i, 1]), 2).sum() for i in set(y_true))
+        false_positive = truepos_plus_falsepos - true_positive
+        false_negative = truepos_plus_falseneg - true_positive
+        true_negative = comb(len(concatenation), 2) - true_positive - false_positive - false_negative
+        return (true_positive + true_negative) / (true_positive + false_positive + false_negative + true_negative)
 
     def from_model(self, model, X, Y, y_true):
         """Method to use the metric from a model and data.
@@ -125,4 +134,3 @@ class ClusterIntersection(BaseMetric):
         """
         y_pred = model.predict_cluster(X, Y)
         return self(y_pred, y_true)
-
