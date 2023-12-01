@@ -19,7 +19,7 @@ The command
 ```bash
 python evaluation.py
 ``````
-will be used, with two other test datasets. Make sure that it works well.
+will be used for evaluation, with two other test datasets. Make sure that it works well.
 
 ## Context
 
