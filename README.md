@@ -17,11 +17,14 @@ Mousseau Vincent
 
 The command 
 ```bash
+conda env create -f config/env.yml
+conda activate cs_td
 python evaluation.py
 ``````
 will be used for evaluation, with two other test datasets. Make sure that it works well.
 
 ## Context
+Our objective is to clusterize the decision makers through their observed preferences and to learn the decisions functions of each of these clusters.
 
 ## Deliverables
 You will present your results during an oral presentation organized the on Tuesday $13^{th}$ (from 1.30 pm) of February. Exact time will be communicated later. Along the presentation, we are waiting for:
