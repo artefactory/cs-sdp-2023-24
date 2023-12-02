@@ -9,6 +9,11 @@ Belahcene Khaled,
 Mousseau Vincent
 
 ## Table of Contents
+- [Decision Systems and Preferences](#decision-systems-and-preferences)
+- [Repository Usage](#repository-usage)
+- [Context](#context)
+- [Deliverables](#deliverables)
+- [Resources](#resources)
 
 ## Repository usage
 1.  Install [git-lfs ](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage), it will be needed to download the data
