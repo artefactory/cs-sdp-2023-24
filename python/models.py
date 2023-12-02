@@ -2,7 +2,6 @@ import pickle
 from abc import abstractmethod
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
 
 
 class BaseModel(object):
@@ -210,7 +209,7 @@ class TwoClustersMIP(BaseModel):
             Time limit for the MIP resolution in seconds. If None, no limit is given.
         """
         self.seed = 123
-        self.models = self.instantiate()
+        self.model = self.instantiate()
 
     def instantiate(self):
         """Instantiation of the MIP Variables"""
