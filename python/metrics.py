@@ -94,9 +94,9 @@ class ClusterIntersection(BaseMetric):
         Parameters
         ----------
         y_pred (np.ndarray of shape (n_elements)):
-            index (in {0, 1}) of predicted cluster for each element
+            index (in {0, 1, ..., n}) of predicted cluster for each element
         y_true (np.ndarray of shape (n_elements)):
-            index (in {0, 1}) of ground truth cluster for each element
+            index (in {0, 1, ..., n}) of ground truth cluster for each element
 
         Returns
         -------
