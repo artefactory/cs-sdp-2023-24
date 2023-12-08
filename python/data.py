@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Dataloader(object):
-    """Help class to load a dataset from a bunch of .npy files
+    """Main class to load a dataset from a bunch of .npy files
 
     Arguments
     ----------

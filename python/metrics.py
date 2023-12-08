@@ -62,7 +62,7 @@ class PairsExplained(BaseMetric):
         Parameters
         ----------
         model : BaseModel
-            Model to be evaluated
+            Model to be evaluated. Must implement the predict_utility method.
         X : np.ndarray
             data to be evaluated: features of preferred elements
         Y : np.ndarray
@@ -88,49 +88,49 @@ class ClusterIntersection(BaseMetric):
     def __init__(self):
         super().__init__()
 
-    def __call__(self, y_pred, y_true):
+    def __call__(self, z_pred, z_true):
         """main function to call the ClusterIntersection metric
 
         Parameters
         ----------
-        y_pred (np.ndarray of shape (n_elements)):
+        z_pred (np.ndarray of shape (n_elements)):
             index (in {0, 1, ..., n}) of predicted cluster for each element
-        y_true (np.ndarray of shape (n_elements)):
+        z_true (np.ndarray of shape (n_elements)):
             index (in {0, 1, ..., n}) of ground truth cluster for each element
 
         Returns
         -------
         float Percentage of pairs attributed regrouped within same cluster in prediction compared to ground truth
         """
-        assert y_true.shape == y_pred.shape
+        assert z_true.shape == z_pred.shape
 
-        truepos_plus_falsepos = comb(np.bincount(y_true), 2).sum()
-        truepos_plus_falseneg = comb(np.bincount(y_pred), 2).sum()
-        concatenation = np.c_[(y_true, y_pred)]
-        true_positive = sum(comb(np.bincount(concatenation[concatenation[:, 0] == i, 1]), 2).sum() for i in set(y_true))
+        truepos_plus_falsepos = comb(np.bincount(z_true), 2).sum()
+        truepos_plus_falseneg = comb(np.bincount(z_pred), 2).sum()
+        concatenation = np.c_[(z_true, z_pred)]
+        true_positive = sum(comb(np.bincount(concatenation[concatenation[:, 0] == i, 1]), 2).sum() for i in set(z_true))
         false_positive = truepos_plus_falsepos - true_positive
         false_negative = truepos_plus_falseneg - true_positive
         true_negative = comb(len(concatenation), 2) - true_positive - false_positive - false_negative
         return (true_positive + true_negative) / (true_positive + false_positive + false_negative + true_negative)
 
-    def from_model(self, model, X, Y, y_true):
+    def from_model(self, model, X, Y, z_true):
         """Method to use the metric from a model and data.
 
         Parameters
         ----------
         model : BaseModel
-            Model to be evaluated
+            Model to be evaluated. Must implement the .predict_cluster() method.
         X : np.ndarray
             data to be evaluated: features of preferred elements
         Y : np.ndarray
             data to be evaluated: features of unchosen elements
-        y_true : np.ndarray
-            Ground truth cluster associated to each element (x, y)
+        z_true : np.ndarray
+            index (in {0, 1, ..., n}) of ground truth cluster associated to each element (x, y)
 
         Returns
         -------
         float
             float Percentage of pairs attributed regrouped within same cluster in prediction compared to ground truth
         """
-        y_pred = model.predict_cluster(X, Y)
-        return self(y_pred, y_true)
+        z_pred = model.predict_cluster(X, Y)
+        return self(z_pred, z_true)

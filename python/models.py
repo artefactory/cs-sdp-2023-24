@@ -5,16 +5,18 @@ import numpy as np
 
 
 class BaseModel(object):
-    """Can be used for a model on a single cluster or on multiple clusters"""
+    """
+    Base class for models, to be used as coding pattern skeleton.
+    Can be used for a model on a single cluster or on multiple clusters"""
 
     def __init__(self):
-        """Initialization of you model and its hyper-parameters"""
+        """Initialization of your model and its hyper-parameters"""
         pass
 
     @abstractmethod
     def fit(self, X, Y):
         """Fit function to find the parameters according to (X, Y) data.
-        (X, Y) is so that X[i] is preferred to Y[i] for all i.
+        (X, Y) formatting must be so that X[i] is preferred to Y[i] for all i.
 
         Parameters
         ----------
@@ -60,8 +62,10 @@ class BaseModel(object):
         return (X_u - Y_u > 0).astype(int)
 
     def predict_cluster(self, X, Y):
-        """Predict which cluster prefers X over Y THE MOST.
-        Compared to predict_preference, it indicates a cluster and
+        """Predict which cluster prefers X over Y THE MOST, meaning that if several cluster prefer X over Y, it will
+        be assigned to the cluster showing the highest utility difference). The reversal is True if none of the clusters
+        prefer X over Y.
+        Compared to predict_preference, it indicates a cluster index.
 
         Parameters
         -----------
@@ -105,67 +109,10 @@ class BaseModel(object):
         return model
 
 
-class SingleClusterLogisticRegression(BaseModel):
-    """Example of a model on a single cluster, fitting a logistic regression on the different pairs.
-    You can use it to understand how to write your own model and the data format that we are waiting for.
-    """
-
-    def __init__(self, penalty="l2"):
-        self.penalty = penalty
-        self.model = self.instantiate()
-
-    def instantiate(self):
-        return LogisticRegression(penalty=self.penalty)
-
-    def fit(self, X, Y):
-        self.model.fit(
-            np.concatenate([(X - Y), (Y - X)], axis=0),
-            np.concatenate([np.ones(len(X)), np.zeros(len(X))], axis=0),
-        )
-
-    def predict_utility(self, X):
-        return self.model.decision_function(X)
-
-
-class TwoRandomClustersLogisticRegression(BaseModel):
-    """Example of a model on two cluster, fitting a logistic regression on randomly selected pairs.
-    You can use it to understand how to write your own model and the data format that we are waiting for.
-    This model does not work well but you should have same data formatting with TwoClustersMIP.
-    """
-
-    def __init__(self):
-        self.seed = 123
-        self.models = self.instantiate()
-
-    def instantiate(self):
-        model_1 = LogisticRegression()
-        model_2 = LogisticRegression()
-        return [model_1, model_2]
-
-    def fit(self, X, Y):
-        np.random.seed(self.seed)
-        indexes = np.random.randint(0, 2, (len(X)))
-        self.models[0].fit(
-            np.concatenate([(X - Y)[indexes.astype(bool)], (Y - X)[indexes.astype(bool)]]),
-            np.concatenate([np.ones(np.sum(indexes)), np.zeros(np.sum(indexes))]),
-        )
-
-        indexes = 1 - indexes
-        self.models[1].fit(
-            np.concatenate([(X - Y)[indexes.astype(bool)], (Y - X)[indexes.astype(bool)]]),
-            np.concatenate([np.ones(np.sum(indexes)), np.zeros(np.sum(indexes))]),
-        )
-
-    def predict_utility(self, X):
-        return np.stack(
-            [self.models[0].decision_function(X), self.models[1].decision_function(X)], axis=1
-        )
-
-
 class RandomExampleModel(BaseModel):
-    """Example of a model on two cluster, fitting a logistic regression on randomly selected pairs.
+    """Example of a model on two clusters, drawing random coefficients.
     You can use it to understand how to write your own model and the data format that we are waiting for.
-    This model does not work well but you should have same data formatting with TwoClustersMIP.
+    This model does not work well but you should have the same data formatting with TwoClustersMIP.
     """
 
     def __init__(self):
@@ -173,10 +120,19 @@ class RandomExampleModel(BaseModel):
         self.weights = self.instantiate()
 
     def instantiate(self):
+        """No particular instantiation"""
         return []
 
     def fit(self, X, Y):
-        """fit function, sets random weights for each cluster"""
+        """fit function, sets random weights for each cluster. Totally independant from X & Y.
+
+        Parameters
+        ----------
+        X: np.ndarray
+            (n_samples, n_features) features of elements preferred to Y elements
+        Y: np.ndarray
+            (n_samples, n_features) features of unchosen elements
+        """
         np.random.seed(self.seed)
         indexes = np.random.randint(0, 2, (len(X)))
         num_features = X.shape[1]
@@ -189,6 +145,13 @@ class RandomExampleModel(BaseModel):
         return self
 
     def predict_utility(self, X):
+        """Simple utility function from random weights.
+
+        Parameters:
+        -----------
+        X: np.ndarray
+            (n_samples, n_features) list of features of elements
+        """
         return np.stack([np.dot(X, self.weights[0]), np.dot(X, self.weights[1])], axis=1)
 
 
@@ -200,29 +163,43 @@ class TwoClustersMIP(BaseModel):
     def __init__(self, n_pieces, n_clusters):
         """Initialization of the MIP Variables
 
-
         Parameters
         ----------
         n_pieces: int
             Number of pieces for the utility function of each feature.
-        time_limit: int
-            Time limit for the MIP resolution in seconds. If None, no limit is given.
+        n°clusters: int
+            Number of clusters to implement in the MIP.
         """
         self.seed = 123
         self.model = self.instantiate()
 
     def instantiate(self):
-        """Instantiation of the MIP Variables"""
+        """Instantiation of the MIP Variables - To be completed."""
         # To be completed
         return
 
     def fit(self, X, Y):
-        """Estimation of the parameters"""
+        """Estimation of the parameters - To be completed.
+
+        Parameters
+        ----------
+        X: np.ndarray
+            (n_samples, n_features) features of elements preferred to Y elements
+        Y: np.ndarray
+            (n_samples, n_features) features of unchosen elements
+        """
+
         # To be completed
         return
 
     def predict_utility(self, X):
-        """Return Decision Function of the MIP for X"""
+        """Return Decision Function of the MIP for X. - To be completed.
+
+        Parameters:
+        -----------
+        X: np.ndarray
+            (n_samples, n_features) list of features of elements
+        """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
         return
@@ -233,16 +210,8 @@ class HeuristicModel(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self, n_pieces, n_clusters):
-        """Initialization of the MIP Variables
-
-
-        Parameters
-        ----------
-        n_pieces: int
-            Number of pieces for the utility function of each feature.
-        time_limit: int
-            Time limit for the MIP resolution in seconds. If None, no limit is given.
+    def __init__(self):
+        """Initialization of the Heuristic Model.
         """
         self.seed = 123
         self.models = self.instantiate()
@@ -253,12 +222,26 @@ class HeuristicModel(BaseModel):
         return
 
     def fit(self, X, Y):
-        """Estimation of the parameters"""
+        """Estimation of the parameters - To be completed.
+
+        Parameters
+        ----------
+        X: np.ndarray
+            (n_samples, n_features) features of elements preferred to Y elements
+        Y: np.ndarray
+            (n_samples, n_features) features of unchosen elements
+        """
         # To be completed
         return
 
     def predict_utility(self, X):
-        """Return Decision Function of the MIP for X"""
+        """Return Decision Function of the MIP for X. - To be completed.
+
+        Parameters:
+        -----------
+        X: np.ndarray
+            (n_samples, n_features) list of features of elements
+        """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
         return
