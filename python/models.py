@@ -36,6 +36,11 @@ class BaseModel(object):
         -----------
         X: np.ndarray
             (n_samples, n_features) list of features of elements
+
+        Returns
+        -------
+        np.ndarray:
+            (n_samples, n_clusters) array of decision function value for each cluster.
         """
         # Customize what happens in the predict utility function
         return
@@ -151,6 +156,11 @@ class RandomExampleModel(BaseModel):
         -----------
         X: np.ndarray
             (n_samples, n_features) list of features of elements
+
+        Returns
+        -------
+        np.ndarray:
+            (n_samples, n_clusters) array of decision function value for each cluster.
         """
         return np.stack([np.dot(X, self.weights[0]), np.dot(X, self.weights[1])], axis=1)
 
@@ -167,7 +177,7 @@ class TwoClustersMIP(BaseModel):
         ----------
         n_pieces: int
             Number of pieces for the utility function of each feature.
-        n°clusters: int
+        n_clusters: int
             Number of clusters to implement in the MIP.
         """
         self.seed = 123
@@ -199,6 +209,11 @@ class TwoClustersMIP(BaseModel):
         -----------
         X: np.ndarray
             (n_samples, n_features) list of features of elements
+        
+        Returns
+        -------
+        np.ndarray:
+            (n_samples, n_clusters) array of decision function value for each cluster.
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
@@ -241,6 +256,11 @@ class HeuristicModel(BaseModel):
         -----------
         X: np.ndarray
             (n_samples, n_features) list of features of elements
+        
+        Returns
+        -------
+        np.ndarray:
+            (n_samples, n_clusters) array of decision function value for each cluster.
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
