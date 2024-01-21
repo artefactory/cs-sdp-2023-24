@@ -1,4 +1,5 @@
 import pickle
+from gurobipy import *
 from abc import abstractmethod
 
 import numpy as np
@@ -171,12 +172,24 @@ class TwoClustersMIP(BaseModel):
             Number of clusters to implement in the MIP.
         """
         self.seed = 123
-        self.model = self.instantiate()
+        self.model = self.instantiate(n_clusters, n_pieces)
 
-    def instantiate(self):
+    def instantiate(self,n_clusters, n_pieces):
         """Instantiation of the MIP Variables - To be completed."""
-        # To be completed
-        return
+        # Instanciation du modèle
+        m = Model("First model")
+
+        # Constants
+        self.e = 0.001
+        self.e2 = 1e-6
+        self.K = 2
+        self.L = 5
+        self.P = 400
+        self.M1 = 1.1
+        self.M2 = 2.1
+
+        return m
+
 
     def fit(self, X, Y):
         """Estimation of the parameters - To be completed.
@@ -188,9 +201,72 @@ class TwoClustersMIP(BaseModel):
         Y: np.ndarray
             (n_samples, n_features) features of unchosen elements
         """
+        self.N = len(X)
+        self.n = X.shape[1]
 
-        # To be completed
-        return
+        self.U = [[[self.model.addVar(name=f"u_{k}_{i}_{l}") for l in range(1,self.L)] for i in range(self.n)] for k in range(self.K)]
+        self.alpha = [[self.model.addVar(vtype=GRB.BINARY, name=f"a_{j}_{k}") for k in range(self.K)] for j in range(self.N)]
+        self.beta = [self.model.addVar(vtype=GRB.BINARY, name=f"b_{j}") for j in range(self.N)]
+
+        self.model.update()
+
+        minsX = X.min(axis=0)
+        maxsX = X.max(axis=0)
+        minsY = Y.min(axis=0)
+        maxsY = Y.max(axis=0)
+        maxs = [max(maxsX[i], maxsY[i]) for i in range(self.n)]
+        mins = [min(minsX[i], minsY[i]) for i in range(self.n)]
+
+        self.U_abscisse = [[mins[i] + l * (maxs[i] - mins[i]) / self.L for l in range(self.L+1)] for i in range(self.n)]
+
+        #add constraints
+        for j in range(self.N):
+            for k in range(self.K):
+                self.model.addConstr(self.U_k(k,X[j]) - self.U_k(k,Y[j]) - self.M1*self.alpha[j][k] <= -self.e)
+                self.model.addConstr(self.U_k(k,X[j]) - self.U_k(k,Y[j]) - self.M1*(self.alpha[j][k] - 1) >= 0)
+
+            self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*self.beta[j] <= -self.e)
+            self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*(self.beta[j] - 1) >= 0)
+
+        for k in range(self.K):
+            for i in range(self.n):
+                self.model.addConstr(self.U[k][i][0] >= 0)
+                for l in range(self.L-2):
+                    self.model.addConstr(self.U[k][i][l] - self.U[k][i][l+1] <= 0)
+
+            self.model.addConstr(sum([self.U[k][i][self.L-2] for i in range(self.n)]) == 1)
+        
+
+        #set objective
+        self.model.setObjective(sum([self.beta[j] for j in range(self.N)]), GRB.MAXIMIZE)
+        self.model.optimize()
+        
+        print("Fit done !" + str(self.model.status) + " " + str(self.model.ObjVal))
+
+        # self.U_sol = [[[self.U[k][i][l].x for l in range(self.L-1)] for i in range(self.n)] for k in range(self.K)]
+        # self.alpha_sol = [[self.alpha[j][k].x for k in range(self.K)] for j in range(self.N)]
+        # self.beta_sol = [self.beta[j].x for j in range(self.N)]
+
+    
+    def lineaire_morceaux(self, X,Y,x0):
+        """Renvoie l'ordonnée y0 d'un point d'abscisse x0 sur la courbe
+        passant par les points de coordonnées (X[i],Y[i])"""
+        i = 0
+        while X[i] - x0 <= -self.e2:
+            i += 1
+        i -= 1
+        return Y[i-1] + (Y[i]-Y[i-1])/(X[i]-X[i-1])*(x0-X[i-1])
+
+    def U_k_i(self, k,i,x_j):
+        """Renvoie la valeur de la fonction U_k_i au point d'abscisse x"""
+        x = x_j[i]
+        Y = [0] + [self.U[k][i][l] for l in range(self.L-1)]
+        X = self.U_abscisse[i]
+        return self.lineaire_morceaux(X,Y,x)
+
+    def U_k(self, k,x_j):
+        """Renvoie la valeur de la fonction U_k au point d'abscisse x"""
+        return sum([self.U_k_i(k,i,x_j) for i in range(self.n)])
 
     def predict_utility(self, X):
         """Return Decision Function of the MIP for X. - To be completed.
@@ -200,9 +276,10 @@ class TwoClustersMIP(BaseModel):
         X: np.ndarray
             (n_samples, n_features) list of features of elements
         """
-        # To be completed
-        # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        return
+        result = []
+        for x in X:
+            result.append([self.U_k(0,x), self.U_k(1,x)])
+        return np.array(result)
 
 
 class HeuristicModel(BaseModel):
