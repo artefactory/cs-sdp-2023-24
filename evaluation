@@ -11,5 +11,5 @@ read group_name
 # git clone $path_to_git $group_name
 
 cd $group_name
-ls
+
 python evaluation.py ../data/test_data
