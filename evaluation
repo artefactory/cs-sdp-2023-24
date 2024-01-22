@@ -1,9 +1,9 @@
 echo "Launching evalution bash script...!"
 
-echo "What it the repository ssh address ?"
+echo "What's the repository ssh address ?"
 
 read path_to_git
 
 git clone $path_to_git
 
-python evaluation.py
+python evaluation.py ./data/test_data
