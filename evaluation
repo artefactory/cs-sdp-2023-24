@@ -4,6 +4,12 @@ echo "What's the repository ssh address ?"
 
 read path_to_git
 
-git clone $path_to_git
+echo "What's the name of the group ?"
 
-python evaluation.py ./data/test_data
+read group_name
+
+# git clone $path_to_git $group_name
+
+cd $group_name
+ls
+python evaluation.py ../data/test_data
