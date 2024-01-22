@@ -222,8 +222,8 @@ class TwoClustersMIP(BaseModel):
         #add constraints
         for j in range(self.N):
             for k in range(self.K):
-                self.model.addConstr(self.U_k(k,X[j]) - self.U_k(k,Y[j]) - self.M1*self.alpha[j][k] <= -self.e)
-                self.model.addConstr(self.U_k(k,X[j]) - self.U_k(k,Y[j]) - self.M1*(self.alpha[j][k] - 1) >= 0)
+                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) - self.M1*self.alpha[j][k] <= -self.e)
+                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) - self.M1*(self.alpha[j][k] - 1) >= 0)
 
             self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*self.beta[j] <= -self.e)
             self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*(self.beta[j] - 1) >= 0)
@@ -243,7 +243,7 @@ class TwoClustersMIP(BaseModel):
         
         print("Fit done !" + str(self.model.status) + " " + str(self.model.ObjVal))
 
-        # self.U_sol = [[[self.U[k][i][l].x for l in range(self.L-1)] for i in range(self.n)] for k in range(self.K)]
+        self.U_sol = [[[self.U[k][i][l].x for l in range(self.L-1)] for i in range(self.n)] for k in range(self.K)]
         # self.alpha_sol = [[self.alpha[j][k].x for k in range(self.K)] for j in range(self.N)]
         # self.beta_sol = [self.beta[j].x for j in range(self.N)]
 
@@ -257,16 +257,16 @@ class TwoClustersMIP(BaseModel):
         i -= 1
         return Y[i-1] + (Y[i]-Y[i-1])/(X[i]-X[i-1])*(x0-X[i-1])
 
-    def U_k_i(self, k,i,x_j):
+    def U_k_i(self, k,i,x_j,U_coef):
         """Renvoie la valeur de la fonction U_k_i au point d'abscisse x"""
         x = x_j[i]
-        Y = [0] + [self.U[k][i][l] for l in range(self.L-1)]
+        Y = [0] + [U_coef[k][i][l] for l in range(self.L-1)]
         X = self.U_abscisse[i]
         return self.lineaire_morceaux(X,Y,x)
 
-    def U_k(self, k,x_j):
+    def U_k(self, k,x_j,U_coef):
         """Renvoie la valeur de la fonction U_k au point d'abscisse x"""
-        return sum([self.U_k_i(k,i,x_j) for i in range(self.n)])
+        return sum([self.U_k_i(k,i,x_j,U_coef) for i in range(self.n)])
 
     def predict_utility(self, X):
         """Return Decision Function of the MIP for X. - To be completed.
@@ -278,7 +278,7 @@ class TwoClustersMIP(BaseModel):
         """
         result = []
         for x in X:
-            result.append([self.U_k(0,x), self.U_k(1,x)])
+            result.append([self.U_k(0,x,self.U_sol), self.U_k(1,x,self.U_sol)])
         return np.array(result)
 
 
