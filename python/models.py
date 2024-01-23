@@ -261,6 +261,8 @@ class TwoClustersMIP(BaseModel):
         i = 0
         while X[i] - x0 <= -self.e2:
             i += 1
+            if i == self.L:
+                return Y[i-1]
         i -= 1
         return Y[i-1] + (Y[i]-Y[i-1])/(X[i]-X[i-1])*(x0-X[i-1])
 
