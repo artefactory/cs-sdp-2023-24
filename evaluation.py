@@ -8,7 +8,7 @@ import numpy as np
 from data import Dataloader
 from models import HeuristicModel, TwoClustersMIP
 
-if __name__ == "__main__":
+if __name__ == "__main__":  
     print("Starting Python script for evaluation")
     print("Path to data is:", sys.argv[1])
     path_to_data = sys.argv[1]
@@ -17,6 +17,7 @@ if __name__ == "__main__":
     print("MIP Model - dataset_4:")
     ### First part: test of the MIP model
     data_loader = Dataloader(os.path.join(path_to_data, "dataset_4"))  # Path to test dataset
+
     X, Y = data_loader.load()
 
     model = TwoClustersMIP(
