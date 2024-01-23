@@ -206,7 +206,9 @@ class TwoClustersMIP(BaseModel):
 
         self.U = [[[self.model.addVar(name=f"u_{k}_{i}_{l}") for l in range(1,self.L)] for i in range(self.n)] for k in range(self.K)]
         self.alpha = [[self.model.addVar(vtype=GRB.BINARY, name=f"a_{j}_{k}") for k in range(self.K)] for j in range(self.N)]
-        self.beta = [self.model.addVar(vtype=GRB.BINARY, name=f"b_{j}") for j in range(self.N)]
+        # self.beta = [self.model.addVar(vtype=GRB.BINARY, name=f"b_{j}") for j in range(self.N)]
+        self.sigma_pos = [[self.model.addVar( name=f"sigma_pos_{j}_{k}") for k in range(self.K)] for j in range(self.N)]
+        self.sigma_neg = [[self.model.addVar( name=f"sigma_neg_{j}_{k}") for k in range(self.K)] for j in range(self.N)]
 
         self.model.update()
 
@@ -222,11 +224,15 @@ class TwoClustersMIP(BaseModel):
         #add constraints
         for j in range(self.N):
             for k in range(self.K):
-                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) - self.M1*self.alpha[j][k] <= -self.e)
-                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) - self.M1*(self.alpha[j][k] - 1) >= 0)
+                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) + self.sigma_pos[k][j] - self.sigma_neg[k][j] - self.M1*self.alpha[j][k] <= -self.e)
+                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) + self.sigma_pos[k][j] - self.sigma_neg[k][j] - self.M1*(self.alpha[j][k] - 1) >= 0)
+                self.model.addConstr(self.sigma_pos[j][k] >= 0)
+                self.model.addConstr(self.sigma_neg[j][k] >= 0)
+            self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) >= 1)
 
-            self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*self.beta[j] <= -self.e)
-            self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*(self.beta[j] - 1) >= 0)
+            # self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*self.beta[j] <= -self.e)
+            # self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) - 1 - self.M2*(self.beta[j] - 1) >= 0)
+
 
         for k in range(self.K):
             for i in range(self.n):
@@ -236,9 +242,10 @@ class TwoClustersMIP(BaseModel):
 
             self.model.addConstr(sum([self.U[k][i][self.L-2] for i in range(self.n)]) == 1)
         
+        
 
         #set objective
-        self.model.setObjective(sum([self.beta[j] for j in range(self.N)]), GRB.MAXIMIZE)
+        self.model.setObjective(sum([sum([self.sigma_neg[j][k] + self.sigma_pos[j][k] for k in range(self.K)]) for j in range(self.N)]), GRB.MINIMIZE)
         self.model.optimize()
         
         print("Fit done !" + str(self.model.status) + " " + str(self.model.ObjVal))
