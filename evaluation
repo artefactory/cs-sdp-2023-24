@@ -8,8 +8,22 @@ echo "What's the name of the group ?"
 
 read group_name
 
-# git clone $path_to_git $group_name
+git clone $path_to_git $group_name
 
 cd $group_name
 
-python evaluation.py ../data/test_data
+echo "Do you want to evaluate models on test (y) or not (n) ?"
+
+read eval_type
+
+if [ $eval_type = "n" ]
+then
+	path_to_data="../data"
+else
+	echo "Evaluating on test data"
+	path_to_data="../data/test_data"
+fi
+
+echo $path_to_data
+
+python evaluation.py $path_to_data
