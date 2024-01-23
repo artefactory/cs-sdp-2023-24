@@ -139,16 +139,9 @@ class RandomExampleModel(BaseModel):
             (n_samples, n_features) features of unchosen elements
         """
         np.random.seed(self.seed)
-<<<<<<< HEAD
         num_features = X.shape[1]
         weights_1 = np.random.rand(num_features) # Weights cluster 1
         weights_2 = np.random.rand(num_features) # Weights cluster 2
-=======
-        indexes = np.random.randint(0, 2, (len(X)))
-        num_features = X.shape[1]
-        weights_1 = np.random.rand(num_features)
-        weights_2 = np.random.rand(num_features)
->>>>>>> main
 
         weights_1 = weights_1 / np.sum(weights_1)
         weights_2 = weights_2 / np.sum(weights_2)
@@ -168,13 +161,9 @@ class RandomExampleModel(BaseModel):
         np.ndarray:
             (n_samples, n_clusters) array of decision function value for each cluster.
         """
-<<<<<<< HEAD
         u_1 = np.dot(X, self.weights[0]) # Utility for cluster 1 = X^T.w_1
         u_2 = np.dot(X, self.weights[1]) # Utility for cluster 2 = X^T.w_2
         return np.stack([u_1, u_2], axis=1) # Stacking utilities over cluster on axis 1
-=======
-        return np.stack([np.dot(X, self.weights[0]), np.dot(X, self.weights[1])], axis=1)
->>>>>>> main
 
 
 class TwoClustersMIP(BaseModel):
