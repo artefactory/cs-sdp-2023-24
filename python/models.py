@@ -1,5 +1,6 @@
 import pickle
 from abc import abstractmethod
+from gurobipy import Model, GRB
 
 import numpy as np
 
@@ -182,12 +183,17 @@ class TwoClustersMIP(BaseModel):
             Number of clusters to implement in the MIP.
         """
         self.seed = 123
+        self.n_pieces = n_pieces
+        self.n_clusters = n_clusters
         self.model = self.instantiate()
+        
 
     def instantiate(self):
-        """Instantiation of the MIP Variables - To be completed."""
-        # To be completed
-        return
+        """Instantiation of the MIP Variables """
+        # Create new model
+        m = Model("TwoClustersMIP")
+
+        return m
 
     def fit(self, X, Y):
         """Estimation of the parameters - To be completed.
@@ -199,6 +205,38 @@ class TwoClustersMIP(BaseModel):
         Y: np.ndarray
             (n_samples, n_features) features of unchosen elements
         """
+
+        # Define parameters
+        n_pairs, n_features = X.shape
+
+        # Define variables
+        # Assuming number of clusters (k), number of pieces (l), 
+        # number of pairs (p), and number of criterio (i) that come from your problem definition.
+
+        # Create the w^{k,l}_i: weights of the utility function of each feature i for each cluster k and each piece l
+        for k in range(self.n_clusters):
+            for l in range(self.n_pieces + 1):
+                for i in range(n_features):
+                    w[k, l, i] = m.addVar(vtype=GRB.CONTINUOUS, lb=0, name=f"w_{k}_{l}_{i}")
+
+        # Create the σ_pk: marginal error of each pair p for each cluster k
+        sigma = {}
+        for p in range(n_pairs):
+            for k in range(self.n_clusters):
+                sigma[p, k] = m.addVar(vtype=GRB.CONTINUOUS, lb=0, name=f"sigma_{p}_{k}")
+
+        # Create the v_pk: binary variable indicating if pair p is explained by cluster k
+        v = {}
+        for p in range(n_pairs):
+            for k in range(self.n_clusters):
+                v[p, k] = m.addVar(vtype=GRB.BINARY, name=f"v_{p}_{k}")
+
+        # Integrate new variables
+        self.model.update()
+
+        # Constrains
+
+
 
         # To be completed
         return
