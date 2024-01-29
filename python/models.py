@@ -173,7 +173,7 @@ class TwoClustersMIP(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self, n_pieces, n_clusters):
+    def __init__(self, n_pieces, n_clusters, *, enable_two_clusters_optimization=True):
         """Initialization of the MIP Variables
 
         Parameters
@@ -182,18 +182,25 @@ class TwoClustersMIP(BaseModel):
             Number of pieces for the utility function of each feature.
         n_clusters: int
             Number of clusters to implement in the MIP.
+        enable_two_clusters_optimization: bool, default=True
+            If true and `n_clusters` is 2 then use an optimized formulation of the problem.
+            Otherwise, use a formulation that is valid for any value of `n_clusters`.
         """
         self.seed = 123
-        self.model = self.instantiate(L=n_pieces, K=n_clusters)
+        self.model = self.instantiate(
+            L=n_pieces,
+            K=n_clusters,
+            enable_two_clusters_optimization=enable_two_clusters_optimization,
+        )
 
-    def instantiate(self, L, K):
+    def instantiate(self, L, K, *, enable_two_clusters_optimization=True):
         """Instantiation of the MIP Variables - To be completed."""
-        # To be completed
         self.m = grb.Model("Market Segmentation")
         self.L = L
         self.K = K
         self.M = 2  # upper bound for our problem
-        return
+        self.two_clusters_optimization = (K == 2) and enable_two_clusters_optimization
+        return self.m
 
     def compute_xl(self, min, max, l):
         return min + l * (max - min) / self.L
@@ -247,29 +254,25 @@ class TwoClustersMIP(BaseModel):
         self.EPS = 10 ** (-3)
 
         # Decision variables
-        self.delta = {
-            (k, j): self.m.addVar(name=f"delta_{k}_{j}", vtype=grb.GRB.BINARY)
-            for j in range(self.P)
-            for k in range(self.K)
-        }
+        if self.two_clusters_optimization:
+            self.delta = {
+                j: self.m.addVar(name=f"delta_{j}", vtype=grb.GRB.BINARY)
+                for j in range(self.P)
+            }
+        else:
+            self.delta = {
+                (k, j): self.m.addVar(name=f"delta_{k}_{j}", vtype=grb.GRB.BINARY)
+                for j in range(self.P)
+                for k in range(self.K)
+            }
+
         self.u = {
-            (k, i, l): self.m.addVar(name=f"u_{k}_{i}_{l}", lb=0)
+            (k, i, l): self.m.addVar(name=f"u_{k}_{i}_{l}", lb=0) if l else 0
             for k in range(self.K)
             for i in range(self.n)
             for l in range(self.L + 1)
         }
-        self.sigma_plus_x = {
-            j: self.m.addVar(name=f"s+_x{j}", lb=0) for j in range(self.P)
-        }
-        self.sigma_minus_x = {
-            j: self.m.addVar(name=f"s-_x{j}", lb=0) for j in range(self.P)
-        }
-        self.sigma_plus_y = {
-            j: self.m.addVar(name=f"s+_y{j}", lb=0) for j in range(self.P)
-        }
-        self.sigma_minus_y = {
-            j: self.m.addVar(name=f"s-_y{j}", lb=0) for j in range(self.P)
-        }
+        self.sigma = {j: self.m.addVar(name=f"s_{j}", lb=0) for j in range(self.P)}
 
         all_elements = np.concatenate([X, Y], axis=0)
         self.criteria_mins = all_elements.min(axis=0)
@@ -278,65 +281,51 @@ class TwoClustersMIP(BaseModel):
         # Constraints
 
         # C1 - Each pair is explained by at least one cluster
-        for j in range(self.P):
-            self.m.addConstr(
-                grb.quicksum([self.delta[(k, j)] for k in range(self.K)]) >= 1
-            )
+        if not self.two_clusters_optimization:
+            for j in range(self.P):
+                self.m.addConstr(
+                    grb.quicksum([self.delta[k, j] for k in range(self.K)]) >= 1
+                )
 
-        # C2 - Each criterion is modeled by a piecewise linear function beginning at 0
-        for k in range(self.K):
-            for i in range(self.n):
-                self.m.addConstr(self.u[(k, i, 0)] == 0)
-
-        # C3 - The utility function for each cluster is modeled by a sum of piecewise linear functions being equal to 1
+        # C2 - The utility function for each cluster is modeled by a sum of piecewise linear functions being equal to 1
         for k in range(self.K):
             self.m.addConstr(
-                grb.quicksum([self.u[(k, i, self.L)] for i in range(self.n)]) == 1
+                grb.quicksum([self.u[k, i, self.L] for i in range(self.n)]) == 1
             )
 
-        # C4 - Each criterion is modeled by an increasing piecewise linear function
+        # C3 - Each criterion is modeled by an increasing piecewise linear function
         for k in range(self.K):
             for i in range(self.n):
                 for l in range(self.L):
+                    self.m.addConstr(self.u[k, i, l + 1] - self.u[k, i, l] >= 0)
+
+        # C4 - delta_k_j implication
+        if self.two_clusters_optimization:
+            for j in range(self.P):
+                self.m.addConstr(
+                    self.compute_score(0, X[j])
+                    + self.sigma[j]
+                    - self.compute_score(0, Y[j])
+                    >= self.EPS + self.M * (self.delta[j] - 1)
+                )
+                self.m.addConstr(
+                    self.compute_score(1, X[j])
+                    + self.sigma[j]
+                    - self.compute_score(1, Y[j])
+                    >= self.EPS - self.M * self.delta[j]
+                )
+        else:
+            for k in range(self.K):
+                for j in range(self.P):
                     self.m.addConstr(
-                        self.u[(k, i, l + 1)] - self.u[(k, i, l)] >= self.EPS
+                        self.compute_score(k, X[j])
+                        + self.sigma[j]
+                        - self.compute_score(k, Y[j])
+                        >= self.EPS + self.M * (self.delta[(k, j)] - 1)
                     )
 
-        # C5 - If x_j is prefered to y_j, then the utility function for cluster k of x_j is greater than the utility of y_j (with potential errors)
-        for k in range(self.K):
-            for j in range(self.P):
-                self.m.addConstr(
-                    self.compute_score(k, X[j])
-                    - self.sigma_plus_x[j]
-                    + self.sigma_minus_x[j]
-                    >= self.compute_score(k, Y[j])
-                    - self.sigma_plus_y[j]
-                    + self.sigma_minus_y[j]
-                    + self.EPS
-                )
-
-        # C6 - Equivalent constraints on the delta_k_j variables
-        for k in range(self.K):
-            for j in range(self.P):
-                self.m.addConstr(
-                    self.compute_score(k, X[j]) - self.compute_score(k, Y[j])
-                    <= self.EPS + self.M * self.delta[(k, j)]
-                )
-                self.m.addConstr(
-                    self.compute_score(k, X[j]) - self.compute_score(k, Y[j])
-                    >= self.EPS + self.M * (self.delta[(k, j)] - 1)
-                )
-
         # Objective
-        self.obj = grb.quicksum(
-            [
-                self.sigma_minus_x[j]
-                + self.sigma_plus_x[j]
-                + self.sigma_minus_y[j]
-                + self.sigma_plus_y[j]
-                for j in range(self.P)
-            ]
-        )
+        self.obj = grb.quicksum(list(self.sigma.values()))
         self.m.setObjective(self.obj, grb.GRB.MINIMIZE)
 
         self.m.params.outputflag = 0
@@ -346,7 +335,7 @@ class TwoClustersMIP(BaseModel):
         self.m.optimize()
 
         assert self.m.status != grb.GRB.INFEASIBLE
-        return
+        return self.m
 
     def predict_utility(self, X):
         """Return Decision Function of the MIP for X. - To be completed.
@@ -361,9 +350,10 @@ class TwoClustersMIP(BaseModel):
         np.ndarray:
             (n_samples, n_clusters) array of decision function value for each cluster.
         """
-        # To be completed
-        # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        return
+        utilities = []
+        for k in range(self.K):
+            utilities.append(np.array([self.compute_score(k, x).getValue() for x in X]))
+        return np.stack(utilities, axis=1)
 
 
 class HeuristicModel(BaseModel):
