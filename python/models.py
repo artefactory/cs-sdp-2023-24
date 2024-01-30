@@ -224,8 +224,8 @@ class TwoClustersMIP(BaseModel):
         #add constraints
         for j in range(self.N):
             for k in range(self.K):
-                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) + self.sigma_pos[k][j] - self.sigma_neg[k][j] - self.M1*self.alpha[j][k] <= -self.e)
-                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) + self.sigma_pos[k][j] - self.sigma_neg[k][j] - self.M1*(self.alpha[j][k] - 1) >= 0)
+                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) + self.sigma_pos[j][k] - self.sigma_neg[j][k] - self.M1*self.alpha[j][k] <= -self.e)
+                self.model.addConstr(self.U_k(k,X[j],self.U) - self.U_k(k,Y[j],self.U) + self.sigma_pos[j][k] - self.sigma_neg[j][k] - self.M1*(self.alpha[j][k] - 1) >= 0)
                 self.model.addConstr(self.sigma_pos[j][k] >= 0)
                 self.model.addConstr(self.sigma_neg[j][k] >= 0)
             self.model.addConstr(sum([self.alpha[j][k] for k in range(self.K)]) >= 1)
@@ -261,6 +261,8 @@ class TwoClustersMIP(BaseModel):
         i = 0
         while X[i] - x0 <= -self.e2:
             i += 1
+            if i == self.L:
+                return Y[i-1]
         i -= 1
         return Y[i-1] + (Y[i]-Y[i-1])/(X[i]-X[i-1])*(x0-X[i-1])
 
