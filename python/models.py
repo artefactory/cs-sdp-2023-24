@@ -202,7 +202,7 @@ class TwoClustersMIP(BaseModel):
 
     def u_k_i(self, k, i, X, values: bool = False):
         x = X[i]
-        if x == self.maxs[i]:
+        if x >= self.maxs[i]:
             return self.Us[k][i][-1] if not values else self.Us[k][i][-1].X
         l = math.floor(self.L * (x - self.mins[i]) / (self.maxs[i] - self.mins[i]))
         x_l = self.mins[i] + l * (self.maxs[i] - self.mins[i]) / self.L
@@ -315,6 +315,177 @@ class TwoClustersMIP(BaseModel):
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
+        criteria = np.array(
+            list(
+                # enumerate(
+                map(
+                    lambda x: [self.u_k(k, x, values=True) for k in range(self.K)],
+                    X,
+                )
+                # )
+            )
+        )
+
+        # sorted_crit = sorted(criteria, key=lambda l: l[1])
+
+        return criteria
+
+
+class ThreeClustersMIP(BaseModel):
+    """Skeleton of MIP you have to write as the first exercise.
+    You have to encapsulate your code within this class that will be called for evaluation.
+    """
+
+    def __init__(self, n_pieces, n_clusters, n_criteria, precision=0.0001):
+        """Initialization of the MIP Variables
+
+        Parameters
+        ----------
+        n_pieces: int
+            Number of pieces for the utility function of each feature.
+        n°clusters: int
+            Number of clusters to implement in the MIP.
+        """
+        self.seed = 123
+        self.K = n_clusters
+        self.L = n_pieces
+        self.n = n_criteria
+        self.epsilon = precision
+        self.model = self.instantiate()
+
+    def instantiate(self):
+        """Instantiation of the MIP Variables - To be completed."""
+        # To be completed
+        model = Model("3-cluster PL modelling")
+        self.Xs = [model.addVar(name=f"x_{i}") for i in range(self.n)]
+        self.Us = [
+            [
+                [model.addVar(name=f"u_{k}_{i}_{l}") for l in range(self.L + 1)]
+                for i in range(self.n)
+            ]
+            for k in range(self.K)
+        ]
+        # Function must be non-decreasing
+        for k, i, l in zip(range(self.K), range(self.n), range(self.L - 1)):
+            model.addConstr(self.Us[k][i][l] <= self.Us[k][i][l + 1])
+        # self.model.setObjective(sum(sigma_plus) + sum(sigma_minus), GRB.MAXIMIZE)
+        return model
+
+    def u_k_i(self, k, i, X, values: bool = False):
+        x = X[i]
+        if x >= self.maxs[i]:
+            return self.Us[k][i][-1] if not values else self.Us[k][i][-1].X
+        l = math.floor(self.L * (x - self.mins[i]) / (self.maxs[i] - self.mins[i]))
+        x_l = self.mins[i] + l * (self.maxs[i] - self.mins[i]) / self.L
+        width = x - x_l
+
+        ukil = self.Us[k][i][l] if not values else self.Us[k][i][l].X
+        ukilp1 = self.Us[k][i][l + 1] if not values else self.Us[k][i][l + 1].X
+
+        delta = ukilp1 - ukil
+
+        slope = delta * self.L / (self.maxs[i] - self.mins[i])
+        val = ukil + slope * width
+        return val
+
+    def u_k(self, k, X, values: bool = False):
+        if not values:
+            return quicksum(self.u_k_i(k, i, X, values=False) for i in range(self.n))
+        else:
+            return sum(self.u_k_i(k, i, X, values=True) for i in range(self.n))
+
+    def fit(self, X, Y):
+        """Estimation of the parameters - To be completed.
+
+        Parameters
+        ----------
+        X: np.ndarray
+            (n_samples, n_features) features of elements preferred to Y elements
+        Y: np.ndarray
+            (n_samples, n_features) features of unchosen elements
+        """
+
+        self.mins = np.minimum(X.min(axis=0), Y.min(axis=0))
+        self.maxs = np.maximum(X.max(axis=0), Y.max(axis=0))
+
+        self.z = []
+
+        # Set min and max values
+        for k in range(self.K):
+            for i in range(self.n):
+                self.model.addConstr(self.Us[k][i][0] == 0)
+            self.model.addConstr(
+                quicksum(self.Us[k][i][-1] for i in range(self.n)) == 1
+            )
+
+        self.or_constraint_variables = []
+
+        self.underestimation_variables = []
+        self.overestimation_variables = []
+        # To be completed
+        for index, couple in enumerate(zip(X, Y)):
+            self.z.append(self.model.addVar(name=f"one_of_clusters_constraint_{index}"))
+            x, y = couple
+
+            var_acc = []
+            for k in range(self.K):
+                b = self.model.addVar(
+                    name=f"binary_indicator_{index}_cluster_{k}", vtype=GRB.BINARY
+                )
+                splusx = self.model.addVar(name=f"overestimation_x_{index}_cluster_{k}")
+                sminusx = self.model.addVar(
+                    name=f"underestimation_x_{index}_cluster_{k}"
+                )
+
+                splusy = self.model.addVar(name=f"overestimation_y_{index}_cluster_{k}")
+                sminusy = self.model.addVar(
+                    name=f"underestimation_y_{index}_cluster_{k}"
+                )
+
+                self.overestimation_variables.extend((splusx, splusy))
+                self.underestimation_variables.extend((sminusx, sminusy))
+                self.model.addConstr(splusx >= 0)
+                self.model.addConstr(splusy >= 0)
+                self.model.addConstr(sminusx >= 0)
+                self.model.addConstr(sminusy >= 0)
+
+                M = 100
+
+                self.model.addConstr(
+                    (self.u_k(k, x) - splusx + sminusx)
+                    - (self.u_k(k, y) - splusy + sminusy)
+                    + (1 - b) * M
+                    >= 0
+                )
+                var_acc.append(b)
+            self.model.addConstr(self.z[index] == or_(var_acc))
+            self.model.addConstr(self.z[index] == 1)
+            self.or_constraint_variables.extend(var_acc)
+
+        for k in range(self.K):
+            for l in range(self.L - 1):
+                for i in range(self.n):
+                    self.model.addConstr(
+                        self.Us[k][i][l + 1] - self.Us[k][i][l] >= self.epsilon
+                    )
+
+        self.model.setObjective(
+            quicksum(self.overestimation_variables + self.underestimation_variables),
+            GRB.MINIMIZE,
+        )
+        self.model.optimize()
+        return
+
+    def predict_utility(self, X):
+        """Return Decision Function of the MIP for X. - To be completed.
+
+        Parameters:
+        -----------
+        X: np.ndarray
+            (n_samples, n_features) list of features of elements
+        """
+        # To be completed
+        # Do not forget that this method is called in predict_preference (line 42) and therefore should return well-organized data for it to work.
         criteria = np.array(
             list(
                 # enumerate(
