@@ -195,12 +195,12 @@ class TwoClustersMIP(BaseModel):
 
     def instantiate(self, L, K, *, enable_two_clusters_optimization=True):
         """Instantiation of the MIP Variables - To be completed."""
-        self.m = grb.Model("Market Segmentation")
+        model = grb.Model("Market Segmentation")
         self.L = L
         self.K = K
         self.M = 2  # upper bound for our problem
         self.two_clusters_optimization = (K == 2) and enable_two_clusters_optimization
-        return self.m
+        return model
 
     def compute_xl(self, min, max, l):
         return min + l * (max - min) / self.L
@@ -237,6 +237,10 @@ class TwoClustersMIP(BaseModel):
 
         return grb.quicksum(scores)
 
+    def store_result(self):
+        # TODO
+        pass
+
     def fit(self, X, Y):
         """Estimation of the parameters - To be completed.
 
@@ -256,23 +260,23 @@ class TwoClustersMIP(BaseModel):
         # Decision variables
         if self.two_clusters_optimization:
             self.delta = {
-                j: self.m.addVar(name=f"delta_{j}", vtype=grb.GRB.BINARY)
+                j: self.model.addVar(name=f"delta_{j}", vtype=grb.GRB.BINARY)
                 for j in range(self.P)
             }
         else:
             self.delta = {
-                (k, j): self.m.addVar(name=f"delta_{k}_{j}", vtype=grb.GRB.BINARY)
+                (k, j): self.model.addVar(name=f"delta_{k}_{j}", vtype=grb.GRB.BINARY)
                 for j in range(self.P)
                 for k in range(self.K)
             }
 
         self.u = {
-            (k, i, l): self.m.addVar(name=f"u_{k}_{i}_{l}", lb=0) if l else 0
+            (k, i, l): self.model.addVar(name=f"u_{k}_{i}_{l}", lb=0) if l else 0
             for k in range(self.K)
             for i in range(self.n)
             for l in range(self.L + 1)
         }
-        self.sigma = {j: self.m.addVar(name=f"s_{j}", lb=0) for j in range(self.P)}
+        self.sigma = {j: self.model.addVar(name=f"s_{j}", lb=0) for j in range(self.P)}
 
         all_elements = np.concatenate([X, Y], axis=0)
         self.criteria_mins = all_elements.min(axis=0)
@@ -283,13 +287,13 @@ class TwoClustersMIP(BaseModel):
         # C1 - Each pair is explained by at least one cluster
         if not self.two_clusters_optimization:
             for j in range(self.P):
-                self.m.addConstr(
+                self.model.addConstr(
                     grb.quicksum([self.delta[k, j] for k in range(self.K)]) >= 1
                 )
 
         # C2 - The utility function for each cluster is modeled by a sum of piecewise linear functions being equal to 1
         for k in range(self.K):
-            self.m.addConstr(
+            self.model.addConstr(
                 grb.quicksum([self.u[k, i, self.L] for i in range(self.n)]) == 1
             )
 
@@ -297,18 +301,18 @@ class TwoClustersMIP(BaseModel):
         for k in range(self.K):
             for i in range(self.n):
                 for l in range(self.L):
-                    self.m.addConstr(self.u[k, i, l + 1] - self.u[k, i, l] >= 0)
+                    self.model.addConstr(self.u[k, i, l + 1] - self.u[k, i, l] >= 0)
 
         # C4 - delta_k_j implication
         if self.two_clusters_optimization:
             for j in range(self.P):
-                self.m.addConstr(
+                self.model.addConstr(
                     self.compute_score(0, X[j])
                     + self.sigma[j]
                     - self.compute_score(0, Y[j])
                     >= self.EPS + self.M * (self.delta[j] - 1)
                 )
-                self.m.addConstr(
+                self.model.addConstr(
                     self.compute_score(1, X[j])
                     + self.sigma[j]
                     - self.compute_score(1, Y[j])
@@ -317,7 +321,7 @@ class TwoClustersMIP(BaseModel):
         else:
             for k in range(self.K):
                 for j in range(self.P):
-                    self.m.addConstr(
+                    self.model.addConstr(
                         self.compute_score(k, X[j])
                         + self.sigma[j]
                         - self.compute_score(k, Y[j])
@@ -326,16 +330,19 @@ class TwoClustersMIP(BaseModel):
 
         # Objective
         self.obj = grb.quicksum(list(self.sigma.values()))
-        self.m.setObjective(self.obj, grb.GRB.MINIMIZE)
+        self.model.setObjective(self.obj, grb.GRB.MINIMIZE)
 
-        self.m.params.outputflag = 0
+        self.model.params.outputflag = 0
 
-        self.m.update()
+        self.model.update()
 
-        self.m.optimize()
+        self.model.optimize()
 
-        assert self.m.status != grb.GRB.INFEASIBLE
-        return self.m
+        assert self.model.status != grb.GRB.INFEASIBLE
+
+        self.store_result()
+
+        return self.model
 
     def predict_utility(self, X):
         """Return Decision Function of the MIP for X. - To be completed.
