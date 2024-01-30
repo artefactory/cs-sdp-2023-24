@@ -238,8 +238,13 @@ class TwoClustersMIP(BaseModel):
         return grb.quicksum(scores)
 
     def store_result(self):
-        # TODO
-        pass
+        self.utility_functions = np.zeros(
+            (self.K, self.n, self.L + 1), dtype=np.float32
+        )
+        for k in range(self.K):
+            for i in range(self.n):
+                for l in range(1, self.L + 1):
+                    self.utility_functions[k, i, l] = self.u[k, i, l].x
 
     def fit(self, X, Y):
         """Estimation of the parameters - To be completed.
