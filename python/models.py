@@ -4,6 +4,8 @@ from gurobipy import Model, GRB
 import gurobipy as gp
 
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class BaseModel(object):
@@ -173,7 +175,7 @@ class TwoClustersMIP(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self, n_pieces, n_clusters):
+    def __init__(self, n_pieces, n_clusters, n_features=4):
         """Initialization of the MIP Variables
 
         Parameters
@@ -186,9 +188,11 @@ class TwoClustersMIP(BaseModel):
         self.seed = 123
         self.n_pieces = n_pieces
         self.n_clusters = n_clusters
+        self.n_features = n_features
         self.model = self.instantiate()
         self.w = None
         self.g = np.linspace(0, 1, self.n_pieces + 1)
+
         
 
     def instantiate(self):
@@ -213,7 +217,7 @@ class TwoClustersMIP(BaseModel):
         
         n_pairs, n_features = X.shape
         # Breaking points g
-        g = self.g
+        self.n_features = n_features
 
         # Define alpha and the breaking points
         alpha_x = {}
@@ -224,8 +228,8 @@ class TwoClustersMIP(BaseModel):
         for p in range(n_pairs):
             for i in range(n_features):
                 # Find the index of the breaking points
-                up_idx_x = np.searchsorted(g, X[p, i])
-                up_idx_y = np.searchsorted(g, Y[p, i])
+                up_idx_x = np.searchsorted(self.g, X[p, i])
+                up_idx_y = np.searchsorted(self.g, Y[p, i])
                 low_idx_x = up_idx_x - 1
                 low_idx_y = up_idx_y - 1
                 
@@ -234,8 +238,8 @@ class TwoClustersMIP(BaseModel):
                 low_up_idx_y[p, i] = (low_idx_y, up_idx_y)
                 
                 # Compute alpha
-                alpha_x[p, i] = (X[p,i] - g[low_idx_x]) / (g[up_idx_x] - g[low_idx_x])
-                alpha_y[p, i] = (Y[p,i] - g[low_idx_y]) / (g[up_idx_y] - g[low_idx_y])
+                alpha_x[p, i] = (X[p,i] - self.g[low_idx_x]) / (self.g[up_idx_x] - self.g[low_idx_x])
+                alpha_y[p, i] = (Y[p,i] - self.g[low_idx_y]) / (self.g[up_idx_y] - self.g[low_idx_y])
 
         # Big M
         M = 1000
@@ -247,24 +251,9 @@ class TwoClustersMIP(BaseModel):
         # Assuming number of clusters (k), number of pieces (l), 
         # number of pairs (p), and number of criterio (i) that come from your problem definition.
 
-        # Create the w^{k,l}_i: weights of the utility function of each feature i for each cluster k and each piece l (breakingpoint)
-        w = {}
-        for k in range(self.n_clusters):
-            for l in range(self.n_pieces + 1):
-                for i in range(n_features):
-                    w[k, l, i] = self.model.addVar(vtype=GRB.CONTINUOUS, lb=0, name=f"w_{k}_{l}_{i}")
-
-        # Create the σ_pk: marginal error of each pair p for each cluster k
-        sigma = {}
-        for p in range(n_pairs):
-            for k in range(self.n_clusters):
-                sigma[p, k] = self.model.addVar(vtype=GRB.CONTINUOUS, lb=0, name=f"sigma_{p}_{k}")
-
-        # Create the v_pk: binary variable indicating if pair p is explained by cluster k
-        v = {}
-        for p in range(n_pairs):
-            for k in range(self.n_clusters):
-                v[p, k] = self.model.addVar(vtype=GRB.BINARY, name=f"v_{p}_{k}")
+        w = self.model.addVars(self.n_clusters, self.n_pieces + 1, n_features, vtype=GRB.CONTINUOUS, lb=0, name="w")
+        sigma = self.model.addVars(n_pairs, self.n_clusters, vtype=GRB.CONTINUOUS, lb=0, name="sigma")
+        v = self.model.addVars(n_pairs, self.n_clusters, vtype=GRB.BINARY, name="v")
 
         # Integrate new variables
         self.model.update()
@@ -272,8 +261,12 @@ class TwoClustersMIP(BaseModel):
         # Constrains
 
         # Each pair p is valid for at least one cluster k
-        for p in range(n_pairs):
-            self.model.addConstr(gp.quicksum(v[p, k] for k in range(self.n_clusters)) >= 1, name=f"valid_pair_{p}")
+        # for p in range(n_pairs):
+        #     self.model.addConstr(gp.quicksum(v[p, k] for k in range(self.n_clusters)) >= 1, name=f"valid_pair_{p}")
+        
+        # Each pair p is valid for at least one cluster k
+        self.model.addConstrs((gp.quicksum(v[p, k] for k in range(self.n_clusters)) >= 1 for p in range(n_pairs)), name="valid_pair")
+
 
         # It is valid when the difference of utility between the two elements of the pair is greater than the marginal error
         for p in range(n_pairs):
@@ -283,28 +276,43 @@ class TwoClustersMIP(BaseModel):
                 Uy = gp.quicksum(w[k, low_up_idx_y[p, i][0], i] * (1 - alpha_y[p, i]) + w[k, low_up_idx_y[p, i][1], i] * alpha_y[p, i] for i in range(n_features))
 
                 # Create constraint 1
-                self.model.addConstr(Ux - Uy + sigma[p, k] + delta_2 <= v[p, k] * M, name=f"UTA_1_{p}_{k}")
+                # self.model.addConstr(Ux - Uy + sigma[p, k] + delta_2 <= v[p, k] * M, name=f"UTA_1_{p}_{k}")
 
                 # Create constraint 2
                 self.model.addConstr(Ux - Uy + sigma[p, k] >=  delta - (1 - v[p, k]) * M, name=f"UTA_2_{p}_{k}")
         
-        # Monothonicity of preferences 
-        for i in range(n_features):
-            for k in range(self.n_clusters):
-                for l in range(self.n_pieces):
-                    self.model.addConstr(w[k, l, i] <= w[k, l+1, i], name=f"mono_{i}_{k}_{l}")
+        # # Monothonicity of preferences 
+        # for i in range(n_features):
+        #     for k in range(self.n_clusters):
+        #         for l in range(self.n_pieces):
+        #             self.model.addConstr(w[k, l, i] <= w[k, l+1, i], name=f"mono_{i}_{k}_{l}")
+        
+        # Monotonicity of preferences
+        self.model.addConstrs((w[k, l, i] <= w[k, l + 1, i] for k in range(self.n_clusters) for l in range(self.n_pieces) for i in range(n_features)), name="mono")
+
+
+        
+        # # Normalization of weights
+        # for k in range(self.n_clusters):
+        #     self.model.addConstr(gp.quicksum(w[k, self.n_pieces, i]  for i in range(n_features)) == 1, name=f"norm_{k}")
         
         # Normalization of weights
-        for k in range(self.n_clusters):
-            self.model.addConstr(gp.quicksum(w[k, self.n_pieces, i]  for i in range(n_features)) == 1, name=f"norm_{k}")
-        
-        # First weight is 0
+        self.model.addConstrs((gp.quicksum(w[k, self.n_pieces, i] for i in range(n_features)) == 1 for k in range(self.n_clusters)), name="norm")
+
+
+        # # First weight is 0
         for k in range(self.n_clusters):
             self.model.addConstr(gp.quicksum(w[k, 0, i] for i in range(n_features))== 0, name=f"first_{k}_{i}")
+        
+        # First weight is 0
+        #self.model.addConstr((gp.quicksum(w[k, 0, i] for i in range(n_features)) == 0 for k in range(self.n_clusters)), name=f"first")
+
         
         # Set objective
         self.model.setObjective(gp.quicksum(sigma[p, k] for p in range(n_pairs) for k in range(self.n_clusters)), GRB.MINIMIZE)
 
+
+        self.model.setParam("TimeLimit", 300)
         # Optimize model
         self.model.optimize()
 
@@ -315,8 +323,13 @@ class TwoClustersMIP(BaseModel):
                     print(f"w_{k}_{l}_{i} = {w[k, l, i].x}")
 
         # Save variables
-        self.w = w 
-        self.g = g
+        w_array = np.zeros((self.n_clusters, self.n_pieces + 1, n_features))
+        for k in range(self.n_clusters):
+            for l in range(self.n_pieces + 1):
+                for i in range(self.n_features):
+                    w_array[k, l, i] = w[k, l, i].x
+    
+        self.w = w_array
         
         # To be completed
         return self.model
@@ -337,26 +350,80 @@ class TwoClustersMIP(BaseModel):
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
 
-        u_1 = np.dot(X, self.weights[0]) # Utility for cluster 1 = X^T.w_1
-        u_2 = np.dot(X, self.weights[1]) # Utility for cluster 2 = X^T.w_2
-        return np.stack([u_1, u_2], axis=1) # Stacking utilities over cluster on axis 1
+        # Get dimentions
+        n_pairs, n_features = X.shape
+
+        # Define alpha and the breaking points
+        alpha_x = {}
+        alpha_y = {}
+        low_up_idx_x = {}
+
+        for p in range(n_pairs):
+            for i in range(n_features):
+                # Find the index of the breaking points
+                up_idx_x = np.searchsorted(self.g, X[p, i])
+                low_idx_x = up_idx_x - 1
+                
+                # Store the index of the breaking points
+                low_up_idx_x[p, i] = (low_idx_x, up_idx_x)
+                
+                # Compute alpha
+                alpha_x[p, i] = (X[p,i] - self.g[low_idx_x]) / (self.g[up_idx_x] - self.g[low_idx_x])
+
+        # Calculate utility for cluster 1
+        U1 = np.zeros(n_pairs)
+        U2 = np.zeros(n_pairs)
+
+        for p in range(n_pairs):
+            U1[p] = sum(self.w[0, low_up_idx_x[p, i][0], i] * (1 - alpha_x[p, i]) + self.w[0, low_up_idx_x[p, i][1], i] * alpha_x[p, i] for i in range(n_features))
+            U2[p] = sum(self.w[1, low_up_idx_x[p, i][0], i] * (1 - alpha_x[p, i]) + self.w[1, low_up_idx_x[p, i][1], i] * alpha_x[p, i] for i in range(n_features)) 
+
+        return np.stack([U1, U2], axis=1) # Stacking utilities over cluster on axis 1
 
 
-    def save_model(self, path):
-        # Save gurobi model
-        self.model.write(path)
-    
+    def save_model(self, name_file):
+        # Save gurobi model 
+        self.model.write(name_file + ".lp")
+        # Save variable w
+        np.save(name_file + ".npy", self.w)
+
+        print("Model saved")
+
     def load_model(self, path):
         # Load gurobi model
-        self.model = gp.read(path)
-        # Save variable w
-        self.w = {}
-        for v in self.model.getVars():
-            if v.varName[0] == 'w':
-                self.w[v.varName] = v.x
-                
-        return self.model
+        self.model = gp.read(path + ".lp")
+        # Load variable w
+        self.w = np.load(path + ".npy")
 
+        print("Model loaded")
+
+
+    def plot_UTA(self):
+        
+        # Set Seaborn style and create a color palette with different colors for each cluster
+        sns.set()
+        cluster_colors = sns.color_palette("Set1", n_colors=self.n_clusters)
+
+        # Create a 2x4 subplot grid
+        fig, axes = plt.subplots(self.n_features, self.n_clusters, figsize=(12, 6))
+        axes = axes.flatten()
+
+        # Loop through clusters and features to plot the utility functions
+        for k in range(self.n_clusters):
+            cluster_color = cluster_colors[k]  # Get the color for the current cluster
+            for i in range(self.n_features):
+                ax = axes[i * self.n_clusters + k]  # Get the current axis
+                utility_values = [self.w[k, l, i] for l in range(self.n_pieces + 1)]
+                ax.plot(self.g, utility_values, label=f"Feature {i}", color=cluster_color, marker='o')
+                ax.set_title(f"Cluster {k + 1} - Feature {i +1} - Utility function")
+                ax.text(self.g[- 1],  utility_values[-1], f'{ utility_values[-1]:.2f}', fontsize=12, verticalalignment='bottom', horizontalalignment='right')
+
+
+        # Adjust spacing between subplots
+        plt.tight_layout()
+
+        # Show the plots
+        plt.show()
 
 class HeuristicModel(BaseModel):
     """Skeleton of MIP you have to write as the first exercise.
