@@ -276,7 +276,7 @@ class TwoClustersMIP(BaseModel):
                 Uy = gp.quicksum(w[k, low_up_idx_y[p, i][0], i] * (1 - alpha_y[p, i]) + w[k, low_up_idx_y[p, i][1], i] * alpha_y[p, i] for i in range(n_features))
 
                 # Create constraint 1
-                # self.model.addConstr(Ux - Uy + sigma[p, k] + delta_2 <= v[p, k] * M, name=f"UTA_1_{p}_{k}")
+                self.model.addConstr(Ux - Uy + sigma[p, k] + delta_2 <= v[p, k] * M, name=f"UTA_1_{p}_{k}")
 
                 # Create constraint 2
                 self.model.addConstr(Ux - Uy + sigma[p, k] >=  delta - (1 - v[p, k]) * M, name=f"UTA_2_{p}_{k}")
