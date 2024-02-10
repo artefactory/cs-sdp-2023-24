@@ -288,12 +288,12 @@ class TwoClustersMIP(BaseModel):
         M = 100
 
         self.model.addConstrs(
-            (uk_xj[k, j] - self.sigmaxp[j] + self.sigmaxm[j] - uk_yj[k, j] + self.sigmayp[j] - self.sigmaym[j] - self.epsilon >= -M*(1-self.delta1[(k,j)]) for j in range(self.P) for k in range(self.K))
+            (uk_xj[k, j] - self.sigmaxplus[j] + self.sigmaxminus[j] - uk_yj[k, j] + self.sigmayplus[j] - self.sigmayminus[j] - self.epsilon >= -M*(1-self.delta[(k,j)]) for j in range(self.P) for k in range(self.K))
         )
         # There's at least one cluster that prefers X over Y
         for j in range(self.P):
             self.model.addConstr(
-                quicksum(self.delta1[(k, j)] for k in range(self.K)) >= 1
+                quicksum(self.delta[(k, j)] for k in range(self.K)) >= 1
             )
         # The function must be ascending
         self.model.addConstrs(
@@ -307,7 +307,24 @@ class TwoClustersMIP(BaseModel):
             (quicksum(self.U[(k, i, self.L)] for i in range(self.n)) == 1 for k in range(self.K)))
         
         # Objective of our model
-        self.model.setObjective(quicksum(self.sigmaxp[j] + self.sigmaxm[j] + self.sigmayp[j] + self.sigmaym[j] for j in range(self.P)), GRB.MINIMIZE)
+        self.model.setObjective(quicksum(self.sigmaxplus[j] + self.sigmaxminus[j] + self.sigmayplus[j] + self.sigmayminus[j] for j in range(self.P)), GRB.MINIMIZE)
+
+        #A plot to see the importance of the features
+        def plot_Uf_perK(U):
+            import matplotlib.pyplot as plt
+            for k in range(self.K):
+                plt.figure(k)  # Crée une nouvelle figure pour chaque cluster
+                for i in range(self.n):
+                # Calcule les valeurs de l'axe des x et de l'axe des y pour la caractéristique i et le cluster k
+                    x_values = [xl(i, l) for l in range(self.L+1)]
+                    y_values = [U[k, i, l] for l in range(self.L+1)]
+                    plt.plot(x_values, y_values, label="feature {}".format(i))
+            plt.title(f"Utility functions for cluster {k}")
+            plt.legend()
+            plt.xlabel("Feature Value")
+            plt.ylabel("Utility")
+            plt.grid(True)  # Ajoute une grille pour faciliter la lecture
+            plt.show()  # Affiche la figure
 
         # Solving our problem
         self.model.params.outputflag = 0  # Mute mode for Gurobi
@@ -324,7 +341,7 @@ class TwoClustersMIP(BaseModel):
             # print the value of objective function
             print("objective function value: ", self.model.objVal)
             self.U = {(k, i, l): self.U[k, i, l].x for k in range(self.K) for i in range(self.n) for l in range(self.L+1)}
-            self.delta1 = {(k, j): self.delta1[k, j].x for k in range(self.K) for j in range(self.P)}
+            self.delta = {(k, j): self.delta[k, j].x for k in range(self.K) for j in range(self.P)}
 
             sampleX = np.expand_dims(X[0], axis=0)
             sampleY = np.expand_dims(Y[0], axis=0)
@@ -332,6 +349,7 @@ class TwoClustersMIP(BaseModel):
             utilityY = self.predict_utility(sampleY)
             print("utility X: ", utilityX)
             print("utility Y: ", utilityY) 
+            plot_Uf_perK(self.U)
         return self
 
     def predict_utility(self, X):
@@ -349,8 +367,25 @@ class TwoClustersMIP(BaseModel):
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        return
+        maxs = np.ones(self.n)
+        mins = np.zeros(self.n)
+        A = X.shape[0]
 
+        def li(x, i):
+            return int(np.floor(self.L * (x - mins[i]) / (maxs[i] - mins[i])))
+
+        
+        def xl(i, l):
+            return mins[i] + l * (maxs[i] - mins[i]) / self.L
+        
+        utilities = np.zeros((A, self.K))
+        for k in range(self.K):
+            for j in range(A):
+                for i in range(self.n):
+                    l = li(X[j, i], i)
+                    utilities[j, k] += self.U[k, i, li(X[j, i], i)] + ((X[j, i] - xl(i, li(X[j, i], i))) / (xl(i, li(X[j, i], i)+1) - xl(i, li(X[j, i], i)))) * (self.U[k, i, li(X[j, i], i)+1] - self.U[k, i, li(X[j, i], i)])
+
+        return utilities
 
 class HeuristicModel(BaseModel):
     """Skeleton of MIP you have to write as the first exercise.
