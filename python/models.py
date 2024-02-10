@@ -171,7 +171,7 @@ class TwoClustersMIP(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self, n_pieces, n_clusters, epsilon):
+    def __init__(self, n_pieces, n_clusters, epsilon=0.0001):
         """Initialization of the MIP Variables
 
         Parameters
@@ -203,10 +203,10 @@ class TwoClustersMIP(BaseModel):
         Y: np.ndarray
             (n_samples, n_features) features of unchosen elements
         """
-        maxs = np.ones(self.n)
-        mins = np.zeros(self.n)
         self.n = X.shape[1]
         self.P = X.shape[0]
+        maxs = np.ones(self.n)
+        mins = np.zeros(self.n)
 
         #Last index of the piecewise function
         def li(x, i):
