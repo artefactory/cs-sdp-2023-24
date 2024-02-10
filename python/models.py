@@ -8,7 +8,7 @@ from gurobipy import *
 from sklearn.cluster import KMeans
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from uta2 import PairwiseUTA
+from python.uta import PairwiseUTA
 
 
 class BaseModel(object):
