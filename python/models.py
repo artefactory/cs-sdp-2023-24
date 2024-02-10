@@ -1,9 +1,14 @@
+import math
 import pickle
 from abc import abstractmethod
-import math
 
+import metrics
 import numpy as np
 from gurobipy import *
+from sklearn.cluster import KMeans
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from uta2 import PairwiseUTA
 
 
 class BaseModel(object):
@@ -251,6 +256,8 @@ class TwoClustersMIP(BaseModel):
 
         self.underestimation_variables = []
         self.overestimation_variables = []
+        M = 3
+
         # To be completed
         for index, couple in enumerate(zip(X, Y)):
             self.z.append(self.model.addVar(name=f"one_of_clusters_constraint_{index}"))
@@ -277,9 +284,30 @@ class TwoClustersMIP(BaseModel):
                 self.model.addConstr(splusy >= 0)
                 self.model.addConstr(sminusx >= 0)
                 self.model.addConstr(sminusy >= 0)
+                # expr: self.u_k(k, x) - splusx + sminusx
+                # expr2: (self.u_k(k, y) - splusy + sminusy + self.epsilon)
 
+                # (expr > expr2) ==> b = 1
+                # équivalent à : b = 0 ==> (expr <= expr2)
+
+                # et (expr <= expr2) ==> b = 0
+                # équivalent à : b = 1 ==> (expr > expr2)
+                # on peut donc utiliser une indicator constraint
+                # self.model.addConstr(
+                #     (b == 0)
+                #     >> (
+                #         (self.u_k(k, x) - splusx + sminusx)
+                #         <= (self.u_k(k, y) - splusy + sminusy)
+                #     )
+                # )
+                # self.model.addConstr(
+                #     (b == 1)
+                #     >> (
+                #         (self.u_k(k, x) - splusx + sminusx)
+                #         >= (self.u_k(k, y) - splusy + sminusy + self.epsilon)
+                #     )
+                # )
                 M = 100
-
                 self.model.addConstr(
                     (self.u_k(k, x) - splusx + sminusx)
                     - (self.u_k(k, y) - splusy + sminusy)
@@ -287,8 +315,8 @@ class TwoClustersMIP(BaseModel):
                     >= 0
                 )
                 var_acc.append(b)
-            self.model.addConstr(self.z[index] == or_(var_acc))
-            self.model.addConstr(self.z[index] == 1)
+            self.model.addConstr(self.z[index] == quicksum(var_acc))
+            self.model.addConstr(self.z[index] >= 1)
             self.or_constraint_variables.extend(var_acc)
 
         for k in range(self.K):
@@ -315,189 +343,14 @@ class TwoClustersMIP(BaseModel):
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        criteria = np.array(
-            list(
-                # enumerate(
-                map(
-                    lambda x: [self.u_k(k, x, values=True) for k in range(self.K)],
-                    X,
-                )
-                # )
-            )
-        )
-
-        # sorted_crit = sorted(criteria, key=lambda l: l[1])
-
-        return criteria
-
-
-class ThreeClustersMIP(BaseModel):
-    """Skeleton of MIP you have to write as the first exercise.
-    You have to encapsulate your code within this class that will be called for evaluation.
-    """
-
-    def __init__(self, n_pieces, n_clusters, n_criteria, precision=0.0001):
-        """Initialization of the MIP Variables
-
-        Parameters
-        ----------
-        n_pieces: int
-            Number of pieces for the utility function of each feature.
-        n°clusters: int
-            Number of clusters to implement in the MIP.
-        """
-        self.seed = 123
-        self.K = n_clusters
-        self.L = n_pieces
-        self.n = n_criteria
-        self.epsilon = precision
-        self.model = self.instantiate()
-
-    def instantiate(self):
-        """Instantiation of the MIP Variables - To be completed."""
-        # To be completed
-        model = Model("3-cluster PL modelling")
-        self.Xs = [model.addVar(name=f"x_{i}") for i in range(self.n)]
-        self.Us = [
-            [
-                [model.addVar(name=f"u_{k}_{i}_{l}") for l in range(self.L + 1)]
-                for i in range(self.n)
-            ]
-            for k in range(self.K)
-        ]
-        # Function must be non-decreasing
-        for k, i, l in zip(range(self.K), range(self.n), range(self.L - 1)):
-            model.addConstr(self.Us[k][i][l] <= self.Us[k][i][l + 1])
-        # self.model.setObjective(sum(sigma_plus) + sum(sigma_minus), GRB.MAXIMIZE)
-        return model
-
-    def u_k_i(self, k, i, X, values: bool = False):
-        x = X[i]
-        if x >= self.maxs[i]:
-            return self.Us[k][i][-1] if not values else self.Us[k][i][-1].X
-        l = math.floor(self.L * (x - self.mins[i]) / (self.maxs[i] - self.mins[i]))
-        x_l = self.mins[i] + l * (self.maxs[i] - self.mins[i]) / self.L
-        width = x - x_l
-
-        ukil = self.Us[k][i][l] if not values else self.Us[k][i][l].X
-        ukilp1 = self.Us[k][i][l + 1] if not values else self.Us[k][i][l + 1].X
-
-        delta = ukilp1 - ukil
-
-        slope = delta * self.L / (self.maxs[i] - self.mins[i])
-        val = ukil + slope * width
-        return val
-
-    def u_k(self, k, X, values: bool = False):
-        if not values:
-            return quicksum(self.u_k_i(k, i, X, values=False) for i in range(self.n))
+        if len(X.shape) == 1:
+            criteria = [self.UTAs[k].predict_utility(X) for k in range(self.K)]
         else:
-            return sum(self.u_k_i(k, i, X, values=True) for i in range(self.n))
-
-    def fit(self, X, Y):
-        """Estimation of the parameters - To be completed.
-
-        Parameters
-        ----------
-        X: np.ndarray
-            (n_samples, n_features) features of elements preferred to Y elements
-        Y: np.ndarray
-            (n_samples, n_features) features of unchosen elements
-        """
-
-        self.mins = np.minimum(X.min(axis=0), Y.min(axis=0))
-        self.maxs = np.maximum(X.max(axis=0), Y.max(axis=0))
-
-        self.z = []
-
-        # Set min and max values
-        for k in range(self.K):
-            for i in range(self.n):
-                self.model.addConstr(self.Us[k][i][0] == 0)
-            self.model.addConstr(
-                quicksum(self.Us[k][i][-1] for i in range(self.n)) == 1
+            criteria = np.apply_along_axis(
+                lambda x: [self.UTAs[k].predict_utility(x) for k in range(self.K)],
+                axis=1,
+                arr=X,
             )
-
-        self.or_constraint_variables = []
-
-        self.underestimation_variables = []
-        self.overestimation_variables = []
-        # To be completed
-        for index, couple in enumerate(zip(X, Y)):
-            self.z.append(self.model.addVar(name=f"one_of_clusters_constraint_{index}"))
-            x, y = couple
-
-            var_acc = []
-            for k in range(self.K):
-                b = self.model.addVar(
-                    name=f"binary_indicator_{index}_cluster_{k}", vtype=GRB.BINARY
-                )
-                splusx = self.model.addVar(name=f"overestimation_x_{index}_cluster_{k}")
-                sminusx = self.model.addVar(
-                    name=f"underestimation_x_{index}_cluster_{k}"
-                )
-
-                splusy = self.model.addVar(name=f"overestimation_y_{index}_cluster_{k}")
-                sminusy = self.model.addVar(
-                    name=f"underestimation_y_{index}_cluster_{k}"
-                )
-
-                self.overestimation_variables.extend((splusx, splusy))
-                self.underestimation_variables.extend((sminusx, sminusy))
-                self.model.addConstr(splusx >= 0)
-                self.model.addConstr(splusy >= 0)
-                self.model.addConstr(sminusx >= 0)
-                self.model.addConstr(sminusy >= 0)
-
-                M = 100
-
-                self.model.addConstr(
-                    (self.u_k(k, x) - splusx + sminusx)
-                    - (self.u_k(k, y) - splusy + sminusy)
-                    + (1 - b) * M
-                    >= 0
-                )
-                var_acc.append(b)
-            self.model.addConstr(self.z[index] == or_(var_acc))
-            self.model.addConstr(self.z[index] == 1)
-            self.or_constraint_variables.extend(var_acc)
-
-        for k in range(self.K):
-            for l in range(self.L - 1):
-                for i in range(self.n):
-                    self.model.addConstr(
-                        self.Us[k][i][l + 1] - self.Us[k][i][l] >= self.epsilon
-                    )
-
-        self.model.setObjective(
-            quicksum(self.overestimation_variables + self.underestimation_variables),
-            GRB.MINIMIZE,
-        )
-        self.model.optimize()
-        return
-
-    def predict_utility(self, X):
-        """Return Decision Function of the MIP for X. - To be completed.
-
-        Parameters:
-        -----------
-        X: np.ndarray
-            (n_samples, n_features) list of features of elements
-        """
-        # To be completed
-        # Do not forget that this method is called in predict_preference (line 42) and therefore should return well-organized data for it to work.
-        criteria = np.array(
-            list(
-                # enumerate(
-                map(
-                    lambda x: [self.u_k(k, x, values=True) for k in range(self.K)],
-                    X,
-                )
-                # )
-            )
-        )
-
-        # sorted_crit = sorted(criteria, key=lambda l: l[1])
 
         return criteria
 
@@ -507,17 +360,23 @@ class HeuristicModel(BaseModel):
     You have to encapsulate your code within this class that will be called for evaluation.
     """
 
-    def __init__(self):
+    def __init__(self, n_clusters, n_pieces, n_criteria):
         """Initialization of the Heuristic Model."""
         self.seed = 123
-        self.models = self.instantiate()
+        self.K = n_clusters
+        self.L = n_pieces
+        self.n = n_criteria
+        self.instantiate()
 
     def instantiate(self):
         """Instantiation of the MIP Variables"""
         # To be completed
+        self.preprocessing = Pipeline(("std_scaler", StandardScaler()))
+        self.k_means = KMeans(n_clusters=self.K)
+        self.utility_functions = [k for k in range(self.K)]
         return
 
-    def fit(self, X, Y):
+    def fit(self, X, Y, labels=None, iterations=10):
         """Estimation of the parameters - To be completed.
 
         Parameters
@@ -528,7 +387,100 @@ class HeuristicModel(BaseModel):
             (n_samples, n_features) features of unchosen elements
         """
         # To be completed
+        # prefs = np.hstack((X, Y))
+        results = {"explained": [], "grouped": []}
+        diff = X - Y
+
+        data_to_be_clustered = diff
+
+        pairs_explained = metrics.PairsExplained()
+        cluster_intersection = metrics.ClusterIntersection()
+
+        k_means_init = "k-means++"
+
+        for i in range(iterations):
+
+            print(
+                f"################################ ITERATION {i} #################################"
+            )
+            self.k_means = KMeans(n_clusters=self.K)
+
+            # self.k_means.fit(prefs)
+            self.k_means.fit(data_to_be_clustered)
+
+            lbls = self.k_means.labels_
+
+            # labels = np.random.randint(low=0, high=self.K, size=(X.shape[0],))
+
+            # print(labels)
+
+            self.UTAs = [
+                PairwiseUTA(n_criteria=self.n, n_pieces=self.L) for k in range(self.K)
+            ]
+
+            # self.UTAs = [
+            #     TwoClustersMIP(n_criteria=self.n, n_pieces=self.L, n_clusters=1)
+            #     for k in range(self.K)
+            # ]
+
+            for cluster in range(self.K):
+                print(
+                    f"------------------ TRAINING CLUSTER {cluster} ------------------ "
+                )
+                cluster_X = X[lbls == cluster, :]
+                cluster_Y = Y[lbls == cluster, :]
+                # split_pairs = [[pref[: self.n], pref[self.n :]] for pref in cluster_pairs]
+
+                self.UTAs[cluster].fit(cluster_X, cluster_Y)
+
+            def predict_all_utilities_np(row):
+                row_reshaped = row.reshape(-1, self.n)
+                return np.array(
+                    [self.UTAs[k].predict_utility(row_reshaped) for k in range(self.K)]
+                )
+
+            row1 = X[0, :].reshape(-1, self.n)
+
+            self.predict_utility(row1)
+
+            # eval_X = np.hstack([self.UTAs[k].predict_utility(X) for k in range(self.K)])
+            # eval_Y = np.hstack([self.UTAs[k].predict_utility(Y) for k in range(self.K)])
+            eval_X = np.apply_along_axis(self.predict_utility, axis=1, arr=X)
+            eval_Y = np.apply_along_axis(self.predict_utility, axis=1, arr=Y)
+
+            if lbls is not None:
+                explained = pairs_explained.from_model(self, X, Y)
+                grouped = cluster_intersection.from_model(self, X, Y, lbls)
+
+                print(
+                    f"Iter {i} - Percentage of explained preferences on train data:",
+                    explained,
+                )  # You should get 1.0 with the right MIP
+                print(
+                    f"Iter {i} - Percentage of preferences well regrouped into clusters:",
+                    grouped,
+                )
+                results["explained"].append(explained)
+                results["grouped"].append(grouped)
+
+            data_to_be_clustered = np.hstack((diff, eval_X - eval_Y))
+            if type(k_means_init) == str:
+                k_means_init = np.concatenate(
+                    (
+                        self.k_means.cluster_centers_[0],
+                        np.array([0 for i in range(self.K)]),
+                    ),
+                    axis=None,
+                )
+            else:
+                k_means_init = self.k_means.cluster_centers_[0]
+
+        print(results)
+
         return
+
+    def fit_eval(self, X, Y, Z, iterations=10):
+        self.fit(X, Y, labels=Z, iterations=iterations)
 
     def predict_utility(self, X):
         """Return Decision Function of the MIP for X. - To be completed.
@@ -540,4 +492,16 @@ class HeuristicModel(BaseModel):
         """
         # To be completed
         # Do not forget that this method is called in predict_preference (line 42) and therefor should return well-organized data for it to work.
-        return
+
+        if len(X.shape) == 1:
+            return [self.UTAs[k].predict_utility(X) for k in range(self.K)]
+
+        else:
+
+            criteria = np.apply_along_axis(
+                lambda x: [self.UTAs[k].predict_utility(x) for k in range(self.K)],
+                axis=1,
+                arr=X,
+            )
+
+        return criteria
