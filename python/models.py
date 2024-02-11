@@ -244,25 +244,24 @@ class TwoClustersMIP(BaseModel):
         # Big M
         M = 1000
         # Little delta
-        delta = 0.01
-        delta_2 = 0.001
+        delta = 0.0001
+        delta_2 = 0.0001
 
         # Define variables
         # Assuming number of clusters (k), number of pieces (l), 
         # number of pairs (p), and number of criterio (i) that come from your problem definition.
 
+        # w weights of the utility function
         w = self.model.addVars(self.n_clusters, self.n_pieces + 1, n_features, vtype=GRB.CONTINUOUS, lb=0, name="w")
+        # Marginal error
         sigma = self.model.addVars(n_pairs, self.n_clusters, vtype=GRB.CONTINUOUS, lb=0, name="sigma")
+        # valid  pair for cluster k
         v = self.model.addVars(n_pairs, self.n_clusters, vtype=GRB.BINARY, name="v")
 
         # Integrate new variables
         self.model.update()
 
         # Constrains
-
-        # Each pair p is valid for at least one cluster k
-        # for p in range(n_pairs):
-        #     self.model.addConstr(gp.quicksum(v[p, k] for k in range(self.n_clusters)) >= 1, name=f"valid_pair_{p}")
         
         # Each pair p is valid for at least one cluster k
         self.model.addConstrs((gp.quicksum(v[p, k] for k in range(self.n_clusters)) >= 1 for p in range(n_pairs)), name="valid_pair")
@@ -281,20 +280,8 @@ class TwoClustersMIP(BaseModel):
                 # Create constraint 2
                 self.model.addConstr(Ux - Uy + sigma[p, k] >=  delta - (1 - v[p, k]) * M, name=f"UTA_2_{p}_{k}")
         
-        # # Monothonicity of preferences 
-        # for i in range(n_features):
-        #     for k in range(self.n_clusters):
-        #         for l in range(self.n_pieces):
-        #             self.model.addConstr(w[k, l, i] <= w[k, l+1, i], name=f"mono_{i}_{k}_{l}")
-        
         # Monotonicity of preferences
         self.model.addConstrs((w[k, l, i] <= w[k, l + 1, i] for k in range(self.n_clusters) for l in range(self.n_pieces) for i in range(n_features)), name="mono")
-
-
-        
-        # # Normalization of weights
-        # for k in range(self.n_clusters):
-        #     self.model.addConstr(gp.quicksum(w[k, self.n_pieces, i]  for i in range(n_features)) == 1, name=f"norm_{k}")
         
         # Normalization of weights
         self.model.addConstrs((gp.quicksum(w[k, self.n_pieces, i] for i in range(n_features)) == 1 for k in range(self.n_clusters)), name="norm")
@@ -304,31 +291,23 @@ class TwoClustersMIP(BaseModel):
         for k in range(self.n_clusters):
             self.model.addConstr(gp.quicksum(w[k, 0, i] for i in range(n_features))== 0, name=f"first_{k}_{i}")
         
-        # First weight is 0
-        #self.model.addConstr((gp.quicksum(w[k, 0, i] for i in range(n_features)) == 0 for k in range(self.n_clusters)), name=f"first")
-
-        
         # Set objective
         self.model.setObjective(gp.quicksum(sigma[p, k] for p in range(n_pairs) for k in range(self.n_clusters)), GRB.MINIMIZE)
 
 
-        self.model.setParam("TimeLimit", 300)
+        #self.model.setParam("TimeLimit", 300)
         # Optimize model
         self.model.optimize()
 
-        # Print 10 first weights
-        for k in range(self.n_clusters):
-            for l in range(self.n_pieces + 1):
-                for i in range(n_features):
-                    print(f"w_{k}_{l}_{i} = {w[k, l, i].x}")
-
-        # Save variables
+        # Print and save weights w
         w_array = np.zeros((self.n_clusters, self.n_pieces + 1, n_features))
         for k in range(self.n_clusters):
             for l in range(self.n_pieces + 1):
                 for i in range(self.n_features):
-                    w_array[k, l, i] = w[k, l, i].x
-    
+                    print(f"w_{k}_{l}_{i} = {w[k, l, i].x}")
+                    w_array[k, l, i] = w[k, l, i].x                    
+
+        # update w
         self.w = w_array
         
         # To be completed
