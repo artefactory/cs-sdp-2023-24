@@ -15,7 +15,7 @@ class BaseModel(object):
 
     def __init__(self):
         """Initialization of your model and its hyper-parameters"""
-        pass
+        pass 
 
     @abstractmethod
     def fit(self, X, Y):
