@@ -24,7 +24,7 @@ class Dataloader(object):
         """
         self.path_to_data = path_to_data
 
-    def load(self):
+    def load(self, length=None):
         """Main method to call to load the data
 
         Returns
@@ -41,9 +41,11 @@ class Dataloader(object):
             print(f"No data found at specified path {self.path_to_data}")
             return None, None
 
-        return X, Y
+        if length is None:
+            length = len(X)
+        return X[:length], Y[:length]
 
-    def get_ground_truth_labels(self):
+    def get_ground_truth_labels(self, length=None):
         """Returns Ground truth cluster labels.
 
         Returns
@@ -53,7 +55,9 @@ class Dataloader(object):
         """
         try:
             Z = np.load(os.path.join(self.path_to_data, "Z.npy"))
-            return Z
+            if length is None:
+                length = len(Z)
+            return Z[:length]
         except FileNotFoundError:
             print(f"No Ground Truth labels found at specified path {self.path_to_data}")
             return None
