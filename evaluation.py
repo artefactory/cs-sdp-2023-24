@@ -12,8 +12,6 @@ if __name__ == "__main__":
     print("Starting Python script for evaluation")
     print("Path to data is:", sys.argv[1])
     path_to_data = sys.argv[1]
-    print("Deteted available data:")
-    print(os.listdir(path_to_data))
 
     print("Path to Repo is:", sys.argv[2])
     path_to_repo = sys.argv[2]
@@ -21,12 +19,13 @@ if __name__ == "__main__":
     import models
 
     print("MIP Model - dataset_4:")
+    data_length = 1000
     data_loader = myDataloader(os.path.join(path_to_data, "dataset_4"))  # Path to test dataset
-    X, Y = data_loader.load(length=1000)
-    
+    X, Y = data_loader.load(length=data_length)
+    print(X.shape)
     np.random.seed(123)
     model = models.TwoClustersMIP(
-        n_clusters=2, n_pieces=5
+        n_clusters=2, n_pieces=5,
     )  # You can add your model's arguments here, the best would be set up the right ones as default.
     model.fit(X, Y)
 
@@ -34,16 +33,18 @@ if __name__ == "__main__":
     # %Pairs Explained
     pairs_explained = mymetrics.PairsExplained()
     pe_m1 = pairs_explained.from_model(model, X, Y)
+    print("####--------------------------------####")
     print("Percentage of explained preferences:", pe_m1)
 
     # %Cluster Intersection
     cluster_intersection = mymetrics.ClusterIntersection()
 
-    Z = data_loader.get_ground_truth_labels(length=1000)
+    Z = data_loader.get_ground_truth_labels(length=data_length)
     print("% of pairs well grouped together by the model:")
     ri_m1 = cluster_intersection.from_model(model, X, Y, Z)
     print("Cluster intersection for all samples:", ri_m1)
 
+    print("####--------------------------------####")
     ### 2nd part: test of the heuristic model
     data_loader = myDataloader(os.path.join(path_to_data, "dataset_10")) # Path to test dataset
     X, Y = data_loader.load()
@@ -55,7 +56,7 @@ if __name__ == "__main__":
 
     X_train = X[train_indexes]
     Y_train = Y[train_indexes]
-    model = models.HeuristicModel(n_clusters=3)
+    model = models.HeuristicModel()
     model.fit(X_train, Y_train)
 
     X_test = X[test_indexes]
@@ -64,6 +65,7 @@ if __name__ == "__main__":
 
     # Validation on test set
     # %Pairs Explained
+    print("####--------------------------------####")
     pairs_explained = mymetrics.PairsExplained()
     print("Percentage of explained preferences:", pairs_explained.from_model(model, X_test, Y_test))
     pe_m2 = pairs_explained.from_model(model, X_test, Y_test)
@@ -75,6 +77,7 @@ if __name__ == "__main__":
         "Cluster intersection for all samples:",
         cluster_intersection.from_model(model, X_test, Y_test, Z_test),
     )
+    print("####--------------------------------####")
     ri_m2 = cluster_intersection.from_model(model, X_test, Y_test, Z_test)
 
     with open(os.path.join(path_to_repo, "results.txt"), "w") as file:
