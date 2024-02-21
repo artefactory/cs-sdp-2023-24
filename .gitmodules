@@ -1,0 +1,66 @@
+[submodule "students/group_1"]
+	path = students/group_1
+	url = https://gitlab-student.centralesupelec.fr/mathis.pastorelli/cs-sdp.git
+[submodule "students/group_3"]
+	path = students/group_3
+	url = git@github.com:Nicolas-Saudreau/cs-sdp-2023-24.git
+[submodule "students/group_4"]
+	path = students/group_4
+	url = git@github.com:Agathe48/cs-sdp-2023-24.git
+[submodule "students/group_2"]
+	path = students/group_2
+	url = https://gitlab-student.centralesupelec.fr/moetez.lahdhiri/segmentation.git
+[submodule "students/group_5"]
+	path = students/group_5
+	url = git@github.com:abdelillah-bourchad/cs-sdp-2023-24.git
+[submodule "students/group_6"]
+	path = students/group_6
+	url = git@github.com:RemiBtn/MarketSegmentationProject.git
+[submodule "students/group_7"]
+	path = students/group_7
+	url = git@github.com:Enaouram/cs-sdp-2023-24.git
+[submodule "students/group_8"]
+	path = students/group_8
+	url = git@github.com:maximejpg/cs-sdp-2023-24.git
+[submodule "students/group_10"]
+	path = students/group_10
+	url = git@github.com:julenurchoeguia/cs-sdp-2023-24.git
+[submodule "students/group_11"]
+	path = students/group_11
+	url = https://github.com/MatteoGentili/Artefact2023-2024
+[submodule "students/group_9"]
+	path = students/group_9
+	url = https://github.com/ilwwan/cs-sdp-2023-24
+[submodule "students/group_12"]
+	path = students/group_12
+	url = https://github.com/AymericPalaric/cs-sdp-2023-24
+[submodule "students/group_14"]
+	path = students/group_14
+	url = https://github.com/SVJLucas/Decision-Systems
+[submodule "students/group_15"]
+	path = students/group_15
+	url = https://github.com/AxelV-hub/cs-sdp-2023-24
+[submodule "students/group_16"]
+	path = students/group_16
+	url = https://github.com/pierre-ollivier/cs-sdp-2023-24
+[submodule "students/group_17"]
+	path = students/group_17
+	url = https://github.com/joaopvolpi/cs-sdp-2023-24.git
+[submodule "students/group_18"]
+	path = students/group_18
+	url = https://github.com/baptlem/cs-sdp-2023-24
+[submodule "students/group_19"]
+	path = students/group_19
+	url = https://github.com/PaulCanalLDV/cs-sdp-2023-24
+[submodule "students/group_20"]
+	path = students/group_20
+	url = https://github.com/arnoheckel/cs-sdp-2023-24
+[submodule "students/group_21"]
+	path = students/group_21
+	url = https://github.com/amine-bs/cs-sdp-2023-24/
+[submodule "students/group_25"]
+	path = students/group_25
+	url = https://gitlab-student.centralesupelec.fr/theotime.fossat/sdp-mouton-oganezovi-fossat.git
+[submodule "students/group_22"]
+	path = students/group_22
+	url = git@github.com:Bilelle211/MarketClusteringBEI.git

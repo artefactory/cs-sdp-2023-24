@@ -75,7 +75,12 @@ class PairsExplained(BaseMetric):
         """
         Ux = model.predict_utility(X)
         Uy = model.predict_utility(Y)
-        return self(Ux, Uy)
+        try:
+            return self(Ux, Uy)
+        except:
+            print(Ux)
+            print(Uy)
+            return self(Ux, Uy)
 
 
 class ClusterIntersection(BaseMetric):
